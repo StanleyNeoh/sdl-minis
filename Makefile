@@ -33,4 +33,4 @@ $(OBJ_NAME): $(OBJS)
 	$(CC) $(OBJS) $(INCLUDE_PATHS) $(LIBRARY_PATHS) $(COMPILER_FLAGS) $(LINKER_FLAGS) -o $(OBJ_NAME)
 
 run: $(OBJ_NAME)
-	export PATH="$(DLL_PATHS);$$PATH"; ./$(OBJ_NAME)
+	export PATH="$(DLL_PATHS);$$PATH"; ./$(OBJ_NAME).exe
