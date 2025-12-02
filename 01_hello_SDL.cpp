@@ -36,13 +36,21 @@ int main( int argc, char* args[] )
 			screenSurface = SDL_GetWindowSurface( window );
 
 			//Fill the surface white
-			SDL_FillRect( screenSurface, NULL, SDL_MapRGB( screenSurface->format, 0xFF, 0xFF, 0xFF ) );
+			// SDL_FillRect( screenSurface, NULL, SDL_MapRGB( screenSurface->format, 0xFF, 0xFF, 0xFF ) );
+			SDL_Rect fillRect{ 10, 20, 30, 40 };
+			SDL_FillRect( screenSurface, &fillRect, SDL_MapRGB( screenSurface->format, 0xFF, 0xFF, 0xFF ) );
 			
 			//Update the surface
 			SDL_UpdateWindowSurface( window );
             
             //Hack to get window to stay up
-            SDL_Event e; bool quit = false; while( quit == false ){ while( SDL_PollEvent( &e ) ){ if( e.type == SDL_QUIT ) quit = true; } }
+            SDL_Event e;
+			bool quit = false;
+			while( quit == false ){
+				while( SDL_PollEvent( &e ) ){
+					if( e.type == SDL_QUIT ) quit = true; 
+				} 
+			}
 		}
 	}
 
