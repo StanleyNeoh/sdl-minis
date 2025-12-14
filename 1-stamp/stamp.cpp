@@ -162,7 +162,6 @@ int main(int argc, char* args[])
 				case SDL_QUIT:
 					quit = true;
 					break;
-					break;
 				case SDL_MOUSEMOTION:
 					mouse_pos.x = e.motion.x;
 					mouse_pos.y = e.motion.y;
