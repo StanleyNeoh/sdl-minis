@@ -38,6 +38,7 @@ struct SDLApp {
         SDL_DestroyWindow(window);
         window = NULL;
         SDL_Quit();
+        return true;
     }
 
     template <typename T>

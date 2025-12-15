@@ -12,7 +12,7 @@
 int main(int argc, char* args[]) {
     // Argument handlinge
     if (argc < 3) {
-        printf("<executable> <width> <height>");
+        printf("<width> <height>");
         return 1;
     }
     int width = cast_to<int>(args[1]);
