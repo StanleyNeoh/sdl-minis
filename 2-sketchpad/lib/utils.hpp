@@ -1,7 +1,7 @@
 #ifndef LIB_UTILS_HPP
 #define LIB_UTILS_HPP
 
-#include <SDL.h>
+#include <SDL2/SDL.h>
 #include <array>
 #include <type_traits>
 #include <climits>

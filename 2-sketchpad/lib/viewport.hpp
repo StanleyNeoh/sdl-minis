@@ -1,7 +1,7 @@
 #ifndef LIB_VIEWPORT_HPP
 #define LIB_VIEWPORT_HPP
 
-#include <SDL.h>
+#include <SDL2/SDL.h>
 #include <array>
 #include <tuple>
 #include <type_traits>

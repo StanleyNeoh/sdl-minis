@@ -1,7 +1,7 @@
 #ifndef LIB_APP_HPP
 #define LIB_APP_HPP
 
-#include <SDL.h>
+#include <SDL2/SDL.h>
 #include "sketchpad.hpp"
 
 struct SDLApp {

@@ -12,7 +12,7 @@
 int main(int argc, char* args[]) {
     // Argument handlinge
     if (argc < 3) {
-        printf("<width> <height>");
+        std::cerr << "Required args: <width> <height>\n";
         return 1;
     }
     int width = cast_to<int>(args[1]);

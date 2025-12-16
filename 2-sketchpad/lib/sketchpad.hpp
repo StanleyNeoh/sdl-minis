@@ -1,7 +1,7 @@
 #ifndef LIB_SKETCHPAD_HPP
 #define LIB_SKETCHPAD_HPP
 
-#include <SDL.h>
+#include <SDL2/SDL.h>
 #include <iostream>
 #include <vector>
 #include <cmath>
@@ -21,7 +21,7 @@ struct SketchPad: public ViewPort<SketchPad> {
 
     // State
     SDL_Point mouse_pos{-1, -1};
-    int radius = 0;
+    int radius = 20;
     bool mouse_down = false;
     Color color{255, 255, 255};
 
