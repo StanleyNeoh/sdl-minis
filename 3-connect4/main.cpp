@@ -6,7 +6,7 @@
 
 int main(int argc, char* argv[]) {
     App app("Main", 500, 500);
-    Cell cell;
-    app.run(cell);
+    Board<6, 7> board;
+    app.run(board);
     return 0;
 }

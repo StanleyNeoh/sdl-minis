@@ -15,3 +15,6 @@ target_compile_definitions(stamp PRIVATE BLOB_DIR=\"${CMAKE_SOURCE_DIR}/blobs/\"
 
 # 2-sketchpad
 add_executable(sketchpad 2-sketchpad/sketchpad.cpp)
+
+# 3-connect4
+add_executable(connect4 3-connect4/main.cpp)

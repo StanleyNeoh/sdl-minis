@@ -43,27 +43,24 @@ struct App {
         SDL_SetRenderDrawColor(windowRenderer, 255, 255, 255, 255);
         SDL_RenderClear(windowRenderer);
         SDL_RenderPresent(windowRenderer);
+        return true;
     }
 
     template <typename T>
     void run(T& viewport) {
-        viewport.init(windowRenderer, w, h);
+        viewport.init(windowRenderer, 0, 0, w, h);
 
         bool quit = false;
         SDL_Event e;
         while (!quit) {
+            bool handled_event = false;
             while (SDL_PollEvent(&e)) {
-                switch (e.type) {
-                case SDL_QUIT:
-                    quit = true;
-                    break;
-                default:
-                    break;
-                }
+                handled_event |= viewport.handle_event(e, quit);
             }
-            std::cout << "DRAWING" << std::endl;
-            viewport.draw(windowRenderer);
-            SDL_RenderPresent(windowRenderer);
+            if (handled_event) {
+                viewport.draw(windowRenderer);
+                SDL_RenderPresent(windowRenderer);
+            }
             SDL_Delay(100);
         }
     }

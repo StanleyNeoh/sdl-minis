@@ -14,9 +14,9 @@ template <typename T>
 struct ViewPort {
     SDL_Texture* tex;
     SDL_PixelFormat* format;
-    SDL_Rect pos;
+    SDL_Rect rect;
 
-    ViewPort(SDL_Rect pos): pos(pos), tex(NULL), format(NULL) {};
+    ViewPort(SDL_Rect pos): rect(pos), tex(NULL), format(NULL) {};
     ViewPort(): ViewPort({0, 0, 0, 0}) {};
 
     ~ViewPort() {
@@ -30,14 +30,17 @@ struct ViewPort {
         }
     }
 
-    bool init(SDL_Renderer* renderer, int w, int h) {
-        pos.w = w;
-        pos.h = h;
+    bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
+        rect.x = x;
+        rect.y = y;
+        rect.w = w;
+        rect.h = h;
         tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w, h);
         if (tex == NULL) {
             std::cerr << "[Viewport::init] Error: " << SDL_GetError() << "\n";
             return false;
         }
+        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
         uint32_t formatEnum;
         if (SDL_QueryTexture(tex, &formatEnum, NULL, NULL, NULL) != 0) {
             std::cerr << "[Viewport::init] Error: " << SDL_GetError() << "\n";
@@ -48,19 +51,65 @@ struct ViewPort {
             std::cerr << "[Viewport::init] Error: " << SDL_GetError() << "\n";
             return false;
         }
-        static_cast<T*>(this)->post_init(renderer, w, h);
+        return static_cast<T*>(this)->post_init(renderer);
+    }
+
+    bool post_init(SDL_Renderer* renderer) {
         return true;
     }
 
-    bool post_init(SDL_Renderer* renderer, int w, int h) {}
-
     bool draw(SDL_Renderer* renderer) {
-        if (SDL_RenderCopy(renderer, tex, NULL, &pos) != 0) {
+        if (SDL_RenderCopy(renderer, tex, NULL, &rect) != 0) {
             std::cerr << "[Viewport::draw] Error: " << SDL_GetError() << "\n";
             return false;
         }
         return true;
     }
+
+    bool handle_event(SDL_Event& e, bool& quit) {
+        T* self = static_cast<T*>(this);
+        switch(e.type) {
+            case SDL_QUIT:
+                quit = true;
+                self->handle_quit(e.quit);
+                return true;
+            case SDL_MOUSEWHEEL:
+                self->handle_mouse_scroll(e.wheel);
+                return true;
+            case SDL_MOUSEMOTION:
+                {
+                    SDL_MouseMotionEvent me = e.motion;
+                    me.x -= rect.x;
+                    me.y -= rect.y;
+                    if (me.x < 0 || me.x >= rect.w) return true;
+                    if (me.y < 0 || me.y >= rect.h) return true;
+                    self->handle_mouse_motion(me);
+                }
+                return true;
+            case SDL_MOUSEBUTTONDOWN:
+                self->handle_mouse_down(e.button);
+                return true;
+            case SDL_MOUSEBUTTONUP:
+                self->handle_mouse_up(e.button);
+                return true;
+            case SDL_KEYDOWN:
+                self->handle_key_down(e.key);
+                return true;
+            case SDL_KEYUP:
+                self->handle_key_up(e.key);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    void handle_quit(const SDL_QuitEvent&) {}
+    void handle_mouse_scroll(const SDL_MouseWheelEvent&) {}
+    void handle_mouse_motion(const SDL_MouseMotionEvent&) {}
+    void handle_mouse_down(const SDL_MouseButtonEvent&) {}
+    void handle_mouse_up(const SDL_MouseButtonEvent&) {}
+    void handle_key_down(const SDL_KeyboardEvent&) {}
+    void handle_key_up(const SDL_KeyboardEvent&) {}
 };
 
 #endif
