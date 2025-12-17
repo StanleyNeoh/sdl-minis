@@ -187,7 +187,7 @@ struct Board: public ViewPort<Board<M, N>> {
         for (int r = M-1; r >= 0; r--) {
             if (grid[r][col_i] != Cell::PlayerNoneKey) continue;
             grid[r][col_i].set(turn);
-            std::cout << grid << "\n";
+            std::cout << *this << "\n";
             switch_turn();
             return true;
         }
@@ -258,6 +258,18 @@ struct Board: public ViewPort<Board<M, N>> {
         }
         return Cell::PlayerNoneKey;
     }
+
+    template <int _M, int _N>
+    friend std::ostream& operator<<(std::ostream& o, const Board<_M, _N>& board) {
+        for (int i = 0; i < _M; i++) {
+            for (int j = 0; j < _N; j++) {
+                o << board.grid[i][j] << " ";
+            }
+            o << "\n";
+        }
+        return o;
+    }
+
 
     private:
         bool check_loop(int req, Cell p, Cell::CellKey& pp, int& pc) {
