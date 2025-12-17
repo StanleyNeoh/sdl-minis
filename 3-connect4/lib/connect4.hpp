@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <array>
+#include <climits>
 #include "viewport.hpp"
 #include "utils.hpp"
 
@@ -252,8 +253,8 @@ private:
     int heuristic(Cell::CellKey turn) {
         Cell::CellKey other = Cell::other_player(turn);
         int score = 0;
-        score += count_winning_spots(turn, 4) * 100;
-        score -= count_winning_spots(other, 4) * 100;
+        score += count_winning_spots(turn, 4) * 10;
+        score -= count_winning_spots(other, 4) * 10;
         score += count_winning_spots(turn, 3);
         score -= count_winning_spots(other, 3);
         return score;
@@ -261,15 +262,13 @@ private:
 
     int search_AB(Cell::CellKey turn, Action* action = nullptr, int depth = 7, int a = -BIG, int b = BIG) {
         if (depth == 0) return heuristic(turn);
-        int pos = count_winning_spots(turn, 4);
-        int neg = count_winning_spots(other, 4);
         Cell::CellKey other = Cell::other_player(turn);
         int bestScore = INT_MIN;
         int bestMove = -1;
         for (int c = 0; c < N; c++) {
             if (!drop_piece(c, turn)) continue;
             Cell::CellKey winner = check_win();
-            float score;
+            int score;
             if (winner == turn) {
                 score = BIG + 1000 * depth;
             } else if (winner == other) {
