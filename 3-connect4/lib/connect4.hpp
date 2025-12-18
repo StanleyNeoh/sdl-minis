@@ -288,6 +288,9 @@ private:
             }
             if (bestScore >= b) return bestScore;
         }
+        if (bestMove == -1)  {
+            return 0;
+        }
         return bestScore;
     }
 
