@@ -2,7 +2,7 @@
 #include <SDL.h>
 
 #include "lib/app.hpp"
-#include "lib/connect4.hpp"
+#include "lib/board.hpp"
 
 int main(int argc, char* argv[]) {
     App app("Main", 500, 500);

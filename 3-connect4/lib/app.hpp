@@ -53,15 +53,13 @@ struct App {
         bool quit = false;
         SDL_Event e;
         while (!quit) {
-            bool handled_event = false;
             while (SDL_PollEvent(&e)) {
-                handled_event |= viewport.handle_event(e, quit);
+                viewport.handle_event(e, quit);
             }
-            if (handled_event) {
-                viewport.draw(windowRenderer);
-                SDL_RenderPresent(windowRenderer);
-            }
-            SDL_Delay(100);
+            SDL_RenderClear(windowRenderer);
+            viewport.draw(windowRenderer);
+            SDL_RenderPresent(windowRenderer);
+            SDL_Delay(10);
         }
     }
 };

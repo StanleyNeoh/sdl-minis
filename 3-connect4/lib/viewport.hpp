@@ -3,13 +3,6 @@
 
 #include <SDL.h>
 
-struct Pad {
-    int padL;
-    int padR;
-    int padT;
-    int padB;
-};
-
 template <typename T>
 struct ViewPort {
     SDL_Texture* tex;
@@ -30,11 +23,20 @@ struct ViewPort {
         }
     }
 
-    bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
-        rect.x = x;
-        rect.y = y;
-        rect.w = w;
-        rect.h = h;
+    ViewPort(const ViewPort<T>& other) = delete;
+    ViewPort(ViewPort<T>&& other): tex(other.tex), format(other.format), rect(other.rect) {
+        other.tex = NULL;
+        other.format = NULL;
+    }
+
+    ViewPort<T>& operator=(const ViewPort<T>& other) = delete;
+    ViewPort<T>& operator=(ViewPort<T>&& other) noexcept {
+        ViewPort<T> temp = std::move(other);
+        std::swap(*this, temp);
+        return *this;
+    }
+
+    bool init_tex(SDL_Renderer* renderer, int x, int y, int w, int h) {
         tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w, h);
         if (tex == NULL) {
             std::cerr << "[Viewport::init] Error: " << SDL_GetError() << "\n";
@@ -51,20 +53,28 @@ struct ViewPort {
             std::cerr << "[Viewport::init] Error: " << SDL_GetError() << "\n";
             return false;
         }
-        return static_cast<T*>(this)->post_init(renderer);
-    }
-
-    bool post_init(SDL_Renderer* renderer) {
         return true;
     }
 
-    bool draw(SDL_Renderer* renderer) {
+    bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
+        rect.x = x;
+        rect.y = y;
+        rect.w = w;
+        rect.h = h;
+        return true;
+    }
+
+    bool draw_tex(SDL_Renderer* renderer, SDL_Texture* tex) {
         if (SDL_RenderCopy(renderer, tex, NULL, &rect) != 0) {
             std::cerr << "[Viewport::draw] Error: " << SDL_GetError() << "\n";
             return false;
         }
         return true;
     }
+
+    bool draw(SDL_Renderer* renderer) { return true; }
+
+    bool step() { return false; }
 
     bool handle_event(SDL_Event& e, bool& quit) {
         T* self = static_cast<T*>(this);

@@ -2,6 +2,7 @@
 #define LIB_UTILS_HPP
 
 #include <SDL2/SDL.h>
+#include <iostream>
 
 template <typename T>
 T* unsafe_shift(T* ptr, int n_bytes) {
