@@ -47,17 +47,17 @@ struct App {
     }
 
     template <typename T>
-    void run(T& viewport) {
-        viewport.init(windowRenderer, 0, 0, w, h);
+    void run(T& entity) {
+        entity.init(windowRenderer, 0, 0, w, h);
 
         bool quit = false;
         SDL_Event e;
         while (!quit) {
             while (SDL_PollEvent(&e)) {
-                viewport.handle_event(e, quit);
+                entity.handle_event(e, quit);
             }
             SDL_RenderClear(windowRenderer);
-            viewport.draw(windowRenderer);
+            entity.draw();
             SDL_RenderPresent(windowRenderer);
             SDL_Delay(10);
         }

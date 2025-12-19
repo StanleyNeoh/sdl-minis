@@ -1,21 +1,144 @@
-#ifndef LIB_CONNECT4_HPP
-#define LIB_CONNECT4_HPP
+#ifndef LIB_ENTITY_HPP
+#define LIB_ENTITY_HPP
 
+#include <SDL.h>
 #include <iostream>
 #include <vector>
 #include <array>
 #include <climits>
-#include "viewport.hpp"
 #include "utils.hpp"
 #include "engine.hpp"
 
+template <typename T>
+struct Entity {
+    SDL_Renderer* renderer = NULL;
+    SDL_Texture* tex = NULL;
+    SDL_PixelFormat* format = NULL;
+    SDL_Rect rect{-1, -1, -1, -1};
+
+    Entity() = default;
+
+    ~Entity() {
+        if (tex != NULL) {
+            SDL_DestroyTexture(tex);
+            tex = NULL;
+        }
+        if (format != NULL) {
+            SDL_FreeFormat(format);
+            format = NULL;
+        }
+    }
+
+    Entity(const Entity& other) = delete;
+    Entity(Entity&& other): renderer(other.renderer), tex(other.tex), format(other.format), rect(other.rect) {
+        other.renderer = NULL;
+        other.tex = NULL;
+        other.format = NULL;
+    }
+
+    Entity<T>& operator=(const Entity<T>& other) = delete;
+    Entity<T>& operator=(Entity<T>&& other) noexcept {
+        Entity<T> temp = std::move(other);
+        std::swap(*this, temp);
+        return *this;
+    }
+
+    bool init_tex() {
+        tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, rect.w, rect.h);
+        if (tex == NULL) {
+            std::cerr << "[Viewport::init] Error: " << SDL_GetError() << "\n";
+            return false;
+        }
+        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
+        uint32_t formatEnum;
+        if (SDL_QueryTexture(tex, &formatEnum, NULL, NULL, NULL) != 0) {
+            std::cerr << "[Viewport::init] Error: " << SDL_GetError() << "\n";
+            return false;
+        }
+        format = SDL_AllocFormat(formatEnum);
+        if (format == NULL) {
+            std::cerr << "[Viewport::init] Error: " << SDL_GetError() << "\n";
+            return false;
+        }
+        return true;
+    }
+
+    bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
+        this->renderer = renderer;
+        rect.x = x;
+        rect.y = y;
+        rect.w = w;
+        rect.h = h;
+        return true;
+    }
+
+    bool draw_tex() {
+        if (tex == NULL) return false;
+        if (SDL_RenderCopy(renderer, tex, NULL, &rect) != 0) {
+            std::cerr << "[Viewport::draw] Error: " << SDL_GetError() << "\n";
+            return false;
+        }
+        return true;
+    }
+
+    bool draw() { return draw_tex(); }
+
+    bool step() { return false; }
+
+    bool handle_event(SDL_Event& e, bool& quit) {
+        T* self = static_cast<T*>(this);
+        switch(e.type) {
+            case SDL_QUIT:
+                quit = true;
+                self->handle_quit(e.quit);
+                return true;
+            case SDL_MOUSEWHEEL:
+                self->handle_mouse_scroll(e.wheel);
+                return true;
+            case SDL_MOUSEMOTION:
+                {
+                    SDL_MouseMotionEvent me = e.motion;
+                    me.x -= rect.x;
+                    me.y -= rect.y;
+                    if (me.x < 0 || me.x >= rect.w) return true;
+                    if (me.y < 0 || me.y >= rect.h) return true;
+                    self->handle_mouse_motion(me);
+                }
+                return true;
+            case SDL_MOUSEBUTTONDOWN:
+                self->handle_mouse_down(e.button);
+                return true;
+            case SDL_MOUSEBUTTONUP:
+                self->handle_mouse_up(e.button);
+                return true;
+            case SDL_KEYDOWN:
+                self->handle_key_down(e.key);
+                return true;
+            case SDL_KEYUP:
+                self->handle_key_up(e.key);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    void handle_quit(const SDL_QuitEvent&) {}
+    void handle_mouse_scroll(const SDL_MouseWheelEvent&) {}
+    void handle_mouse_motion(const SDL_MouseMotionEvent&) {}
+    void handle_mouse_down(const SDL_MouseButtonEvent&) {}
+    void handle_mouse_up(const SDL_MouseButtonEvent&) {}
+    void handle_key_down(const SDL_KeyboardEvent&) {}
+    void handle_key_up(const SDL_KeyboardEvent&) {}
+};
+
 template <int M, int N>
-struct BoardFrame: public ViewPort<BoardFrame<M, N>> {
-    using Par = ViewPort<BoardFrame<M, N>>;
+struct BoardFrame: public Entity<BoardFrame<M, N>> {
+    using Par = Entity<BoardFrame<M, N>>;
     using Par::rect;
     using Par::tex;
     using Par::format;
     using Par::draw_tex;
+    using Par::init_tex;
     static constexpr Color BACKGROUND{0, 0, 100};
 
     int br = 20;
@@ -31,7 +154,7 @@ struct BoardFrame: public ViewPort<BoardFrame<M, N>> {
 
     bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
         if (!Par::init(renderer, x, y, w, h)) return false;
-        if (!Par::init_tex(renderer, x, y, w, h)) return false;
+        if (!init_tex()) return false;
         uint32_t* pixels;
         int pitch;
         if (SDL_LockTexture(tex, NULL, reinterpret_cast<void**>(&pixels), &pitch) != 0) {
@@ -87,29 +210,27 @@ struct BoardFrame: public ViewPort<BoardFrame<M, N>> {
         SDL_UnlockTexture(tex);
         return true;
     }
-
-    bool draw(SDL_Renderer* renderer) {
-        return draw_tex(renderer, tex);
-    }
 };
 
-struct BoardCell: public ViewPort<BoardCell> {
-    using Par = ViewPort<BoardCell>;
+struct BoardCell: public Entity<BoardCell> {
+    using Par = Entity<BoardCell>;
     using Par::tex;
     using Par::format;
     using Par::rect;
+    using Par::init_tex;
 
-    static constexpr Color hl{0, 255, 0};
+    static constexpr Color RED{255, 0, 0};
+    static constexpr Color BLUE{0, 0, 255};
+    static constexpr Color HIGHLIGHT{0, 255, 0};
 
-    Cell& ref;
-    Color color;
-    int final_y;
+    Cell* ref_cell = NULL;
+    int final_y = 0;
 
-    BoardCell(Color color, int final_y, Cell& ref): Par(), color(color), final_y(final_y), ref(ref) {}
+    BoardCell(Cell* ref_cell, int final_y): ref_cell(ref_cell), final_y(final_y) {}
 
     bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
         if (!Par::init(renderer, x, y, w, h)) return false;
-        if (!init_tex(renderer, x, y, w, h)) return false;
+        if (!init_tex()) return false;
         if (!update_tex()) return false;
         return true;
     }
@@ -122,16 +243,25 @@ struct BoardCell: public ViewPort<BoardCell> {
         }
         float cwr = rect.w / 2.0;
         float chr = rect.h / 2.0;
-        uint32_t cell_color = map_color(format, color);
-        uint32_t hl_color = map_color(format, hl);
-
+        uint32_t hl_color = map_color(format, HIGHLIGHT);
+        uint32_t cell_color;
+        switch(ref_cell->key) {
+        case PlayerBlueKey:
+            cell_color = map_color(format, {0,0,255});
+            break;
+        case PlayerRedKey:
+            cell_color = map_color(format, {255,0,0});
+            break;
+        default:
+            return true;
+        }
         for (int r = 0; r < rect.h; r++) {
             uint32_t* rowpix = unsafe_shift(pixels, r * pitch);
             for (int c = 0; c < rect.w; c++) {
                 float dy = (r - chr) / chr;
                 float dx = (c - cwr) / cwr;
                 float d2 = dx * dx + dy * dy;
-                if (ref.is_marked() && d2 < 0.05) {
+                if (ref_cell->is_marked() && d2 < 0.05) {
                     rowpix[c] = hl_color;
                 } else if (d2 <= 1.0) {
                     rowpix[c] = cell_color;
@@ -142,10 +272,6 @@ struct BoardCell: public ViewPort<BoardCell> {
         return true;
     }
 
-    bool draw(SDL_Renderer* renderer) {
-        return draw_tex(renderer, tex);
-    }
-
     bool step() {
         if (rect.y == final_y) return false;
         rect.y = std::min(final_y, rect.y + 10);
@@ -154,8 +280,9 @@ struct BoardCell: public ViewPort<BoardCell> {
 };
 
 template <int M, int N>
-struct Board: public ViewPort<Board<M, N>> {
-    using Par = ViewPort<Board<M, N>>;
+struct Board: public Entity<Board<M, N>> {
+    using Par = Entity<Board<M, N>>;
+    using Par::renderer;
     using Par::rect;
     using Par::tex;
     using Par::format;
@@ -165,7 +292,6 @@ struct Board: public ViewPort<Board<M, N>> {
     std::vector<BoardCell> cells;
     BoardFrame<M, N> boardframe;
 
-    SDL_Renderer* renderer;
     int col_i = -1;
     int turn = PlayerRedKey;
     int winner = PlayerNoneKey;
@@ -173,16 +299,15 @@ struct Board: public ViewPort<Board<M, N>> {
     bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
         if (!Par::init(renderer, x, y, w, h)) return false;
         if (!boardframe.init(renderer, x, y, w, h)) return false;
-        this->renderer = renderer;
         return true;
     }
 
-    bool draw(SDL_Renderer* renderer) {
+    bool draw() {
         for (auto& cell: cells) {;
-            if (!cell.draw(renderer)) return false;
+            if (!cell.draw()) return false;
             cell.step();
         }
-        return boardframe.draw(renderer);
+        return boardframe.draw();
     }
 
     void handle_mouse_motion(const SDL_MouseMotionEvent& e) {
@@ -223,20 +348,11 @@ struct Board: public ViewPort<Board<M, N>> {
         if (r < 0) return false;
         float cw = boardframe.cw;
         float ch = boardframe.ch;
-        float tlx = + cw * col_i + boardframe.br;
-        float tly = + ch * r + boardframe.br;
-        switch(turn) {
-        case PlayerBlueKey:
-            cells.push_back(BoardCell({0,0,255}, tly, grid.get(r, col_i)));
-            cells.back().init(this->renderer, tlx, start_y, cw, ch);
-            return true;
-        case PlayerRedKey:
-            cells.push_back(BoardCell({255,0,0}, tly, grid.get(r, col_i)));
-            cells.back().init(this->renderer, tlx, start_y, cw, ch);
-            return true;
-        }
-        return false;
+        float tlx = cw * col_i + boardframe.br;
+        float tly = ch * r + boardframe.br;
+        cells.push_back(BoardCell(&grid.get(r, col_i), tly));
+        cells.back().init(renderer, tlx, start_y, cw, ch);
+        return true;
     };
 };
-
 #endif
