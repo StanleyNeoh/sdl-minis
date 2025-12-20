@@ -34,6 +34,44 @@ struct GridLoc {
     }
 };
 
+struct Score {
+    int a;
+    int b;
+    int c;
+
+    bool operator==(const Score& other) const {
+        return a == other.a && b == other.b && c == other.c;
+    }
+
+    bool operator<(const Score& other) const {
+        if (a != other.a) return a < other.a;
+        if (b != other.b) return b < other.b;
+        return c < other.c;
+    }
+
+    bool operator>(const Score& other) const {
+        return other < *this;
+    }
+
+    bool operator<=(const Score& other) const {
+        return *this == other || *this < other;
+    }
+
+    bool operator>=(const Score& other) const {
+        return other <= *this;
+    }
+
+    Score operator-() const {
+        return Score{-a, -b, -c};
+    }
+
+    friend std::ostream& operator<<(std::ostream& o, const Score& score) {
+        o << score.a << "," << score.b << "," << score.c;
+        return o;
+    }
+};
+
+
 template<>
 struct std::hash<GridLoc> {
     std::size_t operator()(const GridLoc& f) const {
@@ -47,7 +85,7 @@ struct Grid {
 
     struct Action {
         int bestMove;
-        std::array<int, N> scores = {-1};
+        std::array<Score, N> scores;
     };
 
 
@@ -218,29 +256,29 @@ struct Grid {
         return action;
     }
 
-    int heuristic(CellKey turn) {
+    Score heuristic(CellKey turn) {
         CellKey other = other_player(turn);
-        int score = 0;
-        score += count_winning_spots(turn, 4) * 10;
-        score -= count_winning_spots(other, 4) * 10;
-        score += count_winning_spots(turn, 3);
-        score -= count_winning_spots(other, 3);
+        Score score{0, 0, 0};
+        score.b += count_winning_spots(turn, 4);
+        score.b -= count_winning_spots(other, 4);
+        score.c += count_winning_spots(turn, 3);
+        score.c -= count_winning_spots(other, 3);
         return score;
     }
 
-    int search_AB(CellKey turn, Action* action = nullptr, int depth = 7, int a = -BIG, int b = BIG) {
+    Score search_AB(CellKey turn, Action* action = nullptr, int depth = 7, Score a = {-BIG, 0, 0}, Score b = {BIG, 0, 0}) {
         if (depth == 0) return heuristic(turn);
         CellKey other = other_player(turn);
-        int bestScore = INT_MIN;
+        Score bestScore = {-BIG, -BIG, -BIG};
         int bestMove = -1;
         for (int c = 0; c < N; c++) {
             if (drop_piece(c, turn) < 0) continue;
             CellKey winner = check_win();
-            int score;
+            Score score;
             if (winner == turn) {
-                score = BIG + 10000 * depth;
+                score = {depth, 0, 0};
             } else if (winner == other) {
-                score = -BIG - 10000 * depth;
+                score = {-depth, 0, 0};
             } else {
                 score = -search_AB(other, nullptr, depth-1, -b, -a);
             }
@@ -257,7 +295,7 @@ struct Grid {
             if (bestScore >= b) return bestScore;
         }
         if (bestMove == -1)  {
-            return 0;
+            return {0, 0, 0};
         }
         return bestScore;
     }
