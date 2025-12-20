@@ -6,8 +6,10 @@
 #include <vector>
 #include <array>
 #include <climits>
+#include <unordered_map>
 #include "utils.hpp"
 #include "engine.hpp"
+#include "atomic"
 
 template <typename T>
 struct Entity {
@@ -38,8 +40,18 @@ struct Entity {
 
     Entity<T>& operator=(const Entity<T>& other) = delete;
     Entity<T>& operator=(Entity<T>&& other) noexcept {
-        Entity<T> temp = std::move(other);
-        std::swap(*this, temp);
+        if (this == &other) return *this;
+        if (tex) SDL_DestroyTexture(tex);
+        if (format) SDL_FreeFormat(format);
+
+        renderer = other.renderer;
+        tex = other.tex;
+        format = other.format;
+        rect = other.rect;
+
+        other.renderer = NULL;
+        other.tex = NULL;
+        other.format = NULL;
         return *this;
     }
 
@@ -223,10 +235,11 @@ struct BoardCell: public Entity<BoardCell> {
     static constexpr Color BLUE{0, 0, 255};
     static constexpr Color HIGHLIGHT{0, 255, 0};
 
-    Cell* ref_cell = NULL;
+    CellKey key = NoneKey;
     int final_y = 0;
 
-    BoardCell(Cell* ref_cell, int final_y): ref_cell(ref_cell), final_y(final_y) {}
+    BoardCell() = default;
+    BoardCell(CellKey key, int final_y): key(key), final_y(final_y) {}
 
     bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
         if (!Par::init(renderer, x, y, w, h)) return false;
@@ -235,7 +248,7 @@ struct BoardCell: public Entity<BoardCell> {
         return true;
     }
 
-    bool update_tex() {
+    bool update_tex(bool marked=false) {
         uint32_t* pixels;
         int pitch;
         if (SDL_LockTexture(tex, NULL, reinterpret_cast<void**>(&pixels), &pitch) != 0) {
@@ -245,11 +258,11 @@ struct BoardCell: public Entity<BoardCell> {
         float chr = rect.h / 2.0;
         uint32_t hl_color = map_color(format, HIGHLIGHT);
         uint32_t cell_color;
-        switch(ref_cell->key) {
-        case PlayerBlueKey:
+        switch(key) {
+        case BotKey:
             cell_color = map_color(format, {0,0,255});
             break;
-        case PlayerRedKey:
+        case PlayerKey:
             cell_color = map_color(format, {255,0,0});
             break;
         default:
@@ -261,7 +274,7 @@ struct BoardCell: public Entity<BoardCell> {
                 float dy = (r - chr) / chr;
                 float dx = (c - cwr) / cwr;
                 float d2 = dx * dx + dy * dy;
-                if (ref_cell->is_marked() && d2 < 0.05) {
+                if (marked && d2 < 0.05) {
                     rowpix[c] = hl_color;
                 } else if (d2 <= 1.0) {
                     rowpix[c] = cell_color;
@@ -287,14 +300,15 @@ struct Board: public Entity<Board<M, N>> {
     using Par::tex;
     using Par::format;
     
-    Grid<M, N> grid;
+    Engine& eng;
 
-    std::vector<BoardCell> cells;
+    std::unordered_map<GridLoc, BoardCell> cells;
     BoardFrame<M, N> boardframe;
 
     int col_i = -1;
-    int turn = PlayerRedKey;
-    int winner = PlayerNoneKey;
+    int winner = NoneKey;
+
+    Board(Engine& eng): eng(eng) {}
 
     bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
         if (!Par::init(renderer, x, y, w, h)) return false;
@@ -303,9 +317,10 @@ struct Board: public Entity<Board<M, N>> {
     }
 
     bool draw() {
+        poll_bot_move();
         for (auto& cell: cells) {;
-            if (!cell.draw()) return false;
-            cell.step();
+            if (!cell.second.draw()) return false;
+            cell.second.step();
         }
         return boardframe.draw();
     }
@@ -321,38 +336,41 @@ struct Board: public Entity<Board<M, N>> {
     }
 
     void handle_mouse_up(const SDL_MouseButtonEvent& e) {
-        if (!drop_piece(col_i, PlayerRedKey, 0)) return;
-        winner = grid.check_win();
-        if (check_win()) return;
-
-        int bot_col_i = grid.bot_plays(PlayerBlueKey);
-        if (!drop_piece(bot_col_i, PlayerBlueKey, -100)) return;
+        if (winner != NoneKey) return;
+        int r;
+        if (!eng.player_plays(col_i, r)) return;
+        drop_piece(r, col_i, PlayerKey);
         check_win();
     }
 
     bool check_win() {
-        winner = grid.check_win();
-        if (winner != PlayerNoneKey) {
+        std::vector<GridLoc> marked;
+        winner = eng.query_win(marked);
+        if (winner != NoneKey) {
             std::cout << "Winner: " << winner << "\n";
-            for (auto& cell: cells) {
-                cell.update_tex();
+            for (auto& loc: marked) {
+                cells[loc].update_tex(true);
             }
             return true;
         } 
         return false;
     }
 
-    bool drop_piece(int col_i, CellKey turn, int start_y = 0) {
-        if (winner != PlayerNoneKey) return false;
-        int r = grid.drop_piece(col_i, turn);
-        if (r < 0) return false;
+    void drop_piece(int r, int c, CellKey turn, int start_y = 0) {
         float cw = boardframe.cw;
         float ch = boardframe.ch;
-        float tlx = cw * col_i + boardframe.br;
+        float tlx = cw * c + boardframe.br;
         float tly = ch * r + boardframe.br;
-        cells.push_back(BoardCell(&grid.get(r, col_i), tly));
-        cells.back().init(renderer, tlx, start_y, cw, ch);
-        return true;
+        cells[{r, c}] = BoardCell(turn, tly);
+        cells[{r, c}].init(renderer, tlx, start_y, cw, ch);
     };
+
+    bool poll_bot_move() {
+        int r, c;
+        if (!eng.query_botmove(r, c)) return false;
+        drop_piece(r, c, BotKey);
+        check_win();
+        return true;
+    }
 };
 #endif

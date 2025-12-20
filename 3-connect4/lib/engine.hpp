@@ -4,69 +4,46 @@
 
 #include "utils.hpp"
 #include <iostream>
+#include <array>
+#include <climits>
+#include <atomic>
+#include <vector>
 
 #define BIG 1000000
 
 using CellKey = char;
-constexpr static CellKey PlayerNoneKey = '.';
-constexpr static CellKey PlayerBlueKey = 'B';
-constexpr static CellKey PlayerRedKey = 'R';
-
-struct Cell {
-    char key;
-    bool marked;
-
-    Cell(): Cell(PlayerNoneKey) {}
-    Cell(char c): key(c), marked(false) {}
-
-    static CellKey other_player(CellKey key) {
-        switch(key) {
-        case PlayerBlueKey:
-            return PlayerRedKey;
-        case PlayerRedKey:
-            return PlayerBlueKey;
-        default:
-            return PlayerNoneKey;
-        }
+constexpr static CellKey NoneKey = '.';
+constexpr static CellKey BotKey = 'B';
+constexpr static CellKey PlayerKey = 'R';
+static CellKey other_player(CellKey key) {
+    switch(key) {
+    case BotKey:
+        return PlayerKey;
+    case PlayerKey:
+        return BotKey;
+    default:
+        return NoneKey;
     }
+}
 
-    void set(CellKey k) {
-        key = k;
+struct GridLoc { 
+    int r;
+    int c;
+    bool operator==(const GridLoc& other) const {
+        return r == other.r && c == other.c;
     }
+};
 
-    friend std::ostream& operator<<(std::ostream& o, const Cell& p) {
-        if (p.marked) {
-            o << '[' << p.key << ']';
-        } else {
-            o << ' ' << p.key << ' ';
-        }
-        return o;
-    }
-
-    bool operator==(const CellKey& k) const {
-        return key == k;
-    }
-
-    bool operator!=(const CellKey& k) const {
-        return key != k;
-    }
-
-    void mark() {
-        marked = true;
-    }
-
-    void unmark() {
-        marked = false;
-    }
-
-    bool is_marked() {
-        return marked;
+template<>
+struct std::hash<GridLoc> {
+    std::size_t operator()(const GridLoc& f) const {
+        return std::hash<int>{}(f.r) ^ std::hash<int>{}(f.r);
     }
 };
 
 template <int M, int N>
 struct Grid {
-    std::array<std::array<Cell, N>, M> grid;
+    std::array<std::array<CellKey, N>, M> grid;
 
     struct Action {
         int bestMove;
@@ -77,15 +54,15 @@ struct Grid {
     Grid() {
         for (int r = 0; r < M; r++) {
             for (int c = 0; c < N; c++) {
-                grid[r][c] = Cell();
+                grid[r][c] = NoneKey;
             }
         }
     }
 
     int drop_piece(int col_i, CellKey turn) {
         for (int r = M-1; r >= 0; r--) {
-            if (grid[r][col_i] != PlayerNoneKey) continue;
-            grid[r][col_i].set(turn);
+            if (grid[r][col_i] != NoneKey) continue;
+            grid[r][col_i] = turn;
             return r;
         }
         return -1;
@@ -93,26 +70,26 @@ struct Grid {
 
     int undrop_piece(int col_i, int r = -1) {
         if (r >= 0) {
-            grid[r][col_i].set(PlayerNoneKey);
+            grid[r][col_i] = NoneKey;
             return r;
         }
         for (int r = 0; r < M; r++) {
-            if (grid[r][col_i] == PlayerNoneKey) continue;
-            grid[r][col_i].set(PlayerNoneKey);
+            if (grid[r][col_i] == NoneKey) continue;
+            grid[r][col_i] = NoneKey;
             return r;
         }
         return -1;
     }
 
-    CellKey check_win(int req = 4) {
-        auto check_loop = [](int req, Cell p, CellKey& pp, int& pc) {
-            if (p.key == pp) {
+    CellKey check_win(std::vector<GridLoc>* marked = nullptr, int req = 4) {
+        auto check_loop = [](int req, CellKey p, CellKey& pp, int& pc) {
+            if (p == pp) {
                 pc++;
             } else {
-                pp = p.key;
+                pp = p;
                 pc = 1;
             }
-            if (pc >= req && pp != PlayerNoneKey) {
+            if (pc >= req && pp != NoneKey) {
                 return true;
             }
             return false;
@@ -120,12 +97,14 @@ struct Grid {
 
         // Check row
         for (int r = 0; r < M; r++) {
-            CellKey pp = PlayerNoneKey;
+            CellKey pp = NoneKey;
             int pc = 0;
             for (int c = 0; c < N; c++) {
                 if (check_loop(req, grid[r][c], pp, pc)) {
-                    for (int _c = c - req + 1; _c <= c; _c++) {
-                        grid[r][_c].mark();
+                    if (marked != nullptr) {
+                        for (int _c = c - req + 1; _c <= c; _c++) {
+                            marked->push_back({r, _c});
+                        }
                     }
                     return pp;
                 }
@@ -134,12 +113,14 @@ struct Grid {
 
         // Check col
         for (int c = 0; c < N; c++) {
-            CellKey pp = PlayerNoneKey;
+            CellKey pp = NoneKey;
             int pc = 0;
             for (int r = 0; r < M; r++) {
                 if (check_loop(req, grid[r][c], pp, pc)) {
-                    for (int _r = r - req + 1; _r <= r; _r++) {
-                        grid[_r][c].mark();
+                    if (marked != nullptr) {
+                        for (int _r = r - req + 1; _r <= r; _r++) {
+                            marked->push_back({_r, c});
+                        }
                     }
                     return pp;
                 }
@@ -150,13 +131,15 @@ struct Grid {
         // 0 <= c <= N-1, 0 <= r <= M-1, -N+1 <= i <= M-1
         // max(0, i) <= r = c + i <= min(N-1+i, M-1)
         for (int i = -N+1; i <= M-1; i++) {
-            CellKey pp = PlayerNoneKey;
+            CellKey pp = NoneKey;
             int pc = 0;
             for (int r = std::max(0, i); r <= std::min(N-1+i, M-1); r++) {
                 int c = r - i;
                 if (check_loop(req, grid[r][c], pp, pc)) {
-                    for (int _r = r - req + 1; _r <= r; _r++) {
-                        grid[_r][_r - i].mark();
+                    if (marked != nullptr) {
+                        for (int _r = r - req + 1; _r <= r; _r++) {
+                            marked->push_back({_r, _r - i});
+                        }
                     }
                     return pp;
                 }
@@ -167,23 +150,21 @@ struct Grid {
         // 0 <= c <= N-1, 0 <= r <= M-1, 0 <= i <= M+N-1
         // 0 <= r = i - c <= i
         for (int i = 0; i <= M+N-1; i++) {
-            CellKey pp = PlayerNoneKey;
+            CellKey pp = NoneKey;
             int pc = 0;
             for (int r = std::max(0, i - N + 1); r <= std::min(i, M-1); r++) {
                 int c = i - r;
                 if (check_loop(req, grid[r][c], pp, pc)) {
-                    for (int _r = r - req + 1; _r <= r; _r++) {
-                        grid[_r][i - _r].mark();
+                    if (marked != nullptr) {
+                        for (int _r = r - req + 1; _r <= r; _r++) {
+                            marked->push_back({_r, i - _r});
+                        }
                     }
                     return pp;
                 }
             }
         }
-        return PlayerNoneKey;
-    }
-
-    Cell& get(int r, int c) {
-        return grid[r][c];
+        return NoneKey;
     }
 
     int count_winning_spots(CellKey key, int req = 4) {
@@ -191,7 +172,7 @@ struct Grid {
         int count = 0;
         for (int r = 0; r < M; r++) {
             for (int c = 0; c < N; c++) {
-                if (grid[r][c].key != PlayerNoneKey) continue;
+                if (grid[r][c] != NoneKey) continue;
                 for (auto& p: steps) {
                     int dr = p.first;
                     int dc = p.second;
@@ -200,7 +181,7 @@ struct Grid {
                     for (; i < req; i++) {
                         int nr = r + i * dr;
                         int nc = c + i * dc;
-                        if (nr < 0 || nr >= M || nc < 0 || nc >= N || grid[nr][nc].key != key) {
+                        if (nr < 0 || nr >= M || nc < 0 || nc >= N || grid[nr][nc] != key) {
                             success = false;
                         };
                     }
@@ -232,19 +213,13 @@ struct Grid {
         return o;
     }
 
-    int bot_plays(CellKey turn) {
+    Action bot_plays(CellKey turn) {
         auto action = search(turn);
-        std::cout << "Bot: " << action.bestMove << "\n";
-        for (int score: action.scores) {
-            std::cout << score << ", ";
-        }
-        std::cout << "\n" << *this << "\n";
-        return action.bestMove;
+        return action;
     }
 
-private:
     int heuristic(CellKey turn) {
-        CellKey other = Cell::other_player(turn);
+        CellKey other = other_player(turn);
         int score = 0;
         score += count_winning_spots(turn, 4) * 10;
         score -= count_winning_spots(other, 4) * 10;
@@ -255,7 +230,7 @@ private:
 
     int search_AB(CellKey turn, Action* action = nullptr, int depth = 7, int a = -BIG, int b = BIG) {
         if (depth == 0) return heuristic(turn);
-        CellKey other = Cell::other_player(turn);
+        CellKey other = other_player(turn);
         int bestScore = INT_MIN;
         int bestMove = -1;
         for (int c = 0; c < N; c++) {
@@ -287,6 +262,73 @@ private:
         return bestScore;
     }
 
+};
+
+struct Engine {
+    Grid<6, 7> grid;
+    std::atomic<CellKey> turn = PlayerKey;
+    std::atomic<CellKey> winner = NoneKey;
+    std::atomic<int> botmove_r = -1;
+    std::atomic<int> botmove_c = -1;
+    std::vector<GridLoc> marked;
+
+
+    bool player_plays(int col, int& r) {
+        if (turn.load(std::memory_order_acquire) != PlayerKey) return false;
+        r = grid.drop_piece(col, PlayerKey);
+        if (r < 0) return false;
+        std::cout << "Player plays: " << col << "\n";
+        std::cout << grid << "\n";
+        handover_turn();
+        return r >= 0;
+    }
+
+    void bot_loop() {
+        std::cout << "Starting bot loop" << std::endl;
+        while (winner.load() == NoneKey) {
+            if (turn.load(std::memory_order_acquire) == BotKey) {
+                auto action = grid.bot_plays(BotKey);
+                int c = action.bestMove;
+                int r = grid.drop_piece(c, BotKey);
+                std::cout << "Bot Plays: " << c << "\n";
+                for (auto s: action.scores) {
+                    std::cout << s << "|";
+                }
+                std::cout << "\n" << grid << "\n";
+                botmove_r.store(r);
+                botmove_c.store(c);
+                handover_turn();
+            }
+            SDL_Delay(100);
+        }
+        std::cout << "Ending bot loop" << std::endl;
+    }
+ 
+    void handover_turn() {
+        winner.store(grid.check_win(&marked));
+        if (winner.load() == NoneKey) {
+            turn.store(other_player(turn), std::memory_order_release);
+        } else {
+            turn.store(NoneKey, std::memory_order_release);
+        }
+    }
+
+    bool query_botmove(
+        int& _botmove_r,
+        int& _botmove_c
+    ) {
+        _botmove_r = botmove_r.load();
+        _botmove_c = botmove_c.load();
+        if (_botmove_r < 0) return false;
+        botmove_r.store(-1);
+        botmove_c.store(-1);
+        return true;
+    }
+
+    CellKey query_win(std::vector<GridLoc>& _marked) {
+        _marked = marked;
+        return winner.load();
+    }
 };
 
 #endif

@@ -4,10 +4,12 @@
 
 #include <SDL.h>
 #include <iostream>
+#include <pthread.h>
+
 
 struct App {
     SDL_Window* window;
-    SDL_Renderer* windowRenderer;
+    SDL_Renderer* window_renderer;
     int w;
     int h;
     bool success;
@@ -16,10 +18,11 @@ struct App {
         success = init(title);
     }
 
+
     ~App() {
-        SDL_DestroyRenderer(windowRenderer);
+        SDL_DestroyRenderer(window_renderer);
         SDL_DestroyWindow(window);
-        windowRenderer = NULL;
+        window_renderer = NULL;
         window = NULL;
         SDL_Quit();
     }
@@ -35,20 +38,20 @@ struct App {
             std::cerr << "Window cannot be created: Error: " << SDL_GetError() << '\n';
             return false;
         }
-        windowRenderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-        if (windowRenderer == NULL) {
+        window_renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+        if (window_renderer == NULL) {
             std::cerr << "Renderer cannot be created: Error: " << SDL_GetError() << '\n';
             return false;
         }
-        SDL_SetRenderDrawColor(windowRenderer, 255, 255, 255, 255);
-        SDL_RenderClear(windowRenderer);
-        SDL_RenderPresent(windowRenderer);
+        SDL_SetRenderDrawColor(window_renderer, 255, 255, 255, 255);
+        SDL_RenderClear(window_renderer);
+        SDL_RenderPresent(window_renderer);
         return true;
     }
 
     template <typename T>
     void run(T& entity) {
-        entity.init(windowRenderer, 0, 0, w, h);
+        entity.init(window_renderer, 0, 0, w, h);
 
         bool quit = false;
         SDL_Event e;
@@ -56,12 +59,13 @@ struct App {
             while (SDL_PollEvent(&e)) {
                 entity.handle_event(e, quit);
             }
-            SDL_RenderClear(windowRenderer);
+            SDL_RenderClear(window_renderer);
             entity.draw();
-            SDL_RenderPresent(windowRenderer);
+            SDL_RenderPresent(window_renderer);
             SDL_Delay(10);
         }
+        std::cout << "Ending SDL Loop" << std::endl;
     }
-};
+ };
 
 #endif
