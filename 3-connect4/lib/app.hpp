@@ -56,6 +56,7 @@ struct App {
         bool quit = false;
         SDL_Event e;
         while (!quit) {
+            entity.handle_network_event();
             while (SDL_PollEvent(&e)) {
                 entity.handle_event(e, quit);
             }

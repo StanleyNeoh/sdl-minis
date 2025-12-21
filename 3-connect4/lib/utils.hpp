@@ -31,4 +31,78 @@ inline std::ostream& operator<<(std::ostream& o, const std::array<std::array<T, 
     return o;
 }
 
+
+using Cell = char;
+constexpr static Cell NoneKey = '.';
+constexpr static Cell BotKey = 'B';
+constexpr static Cell PlayerKey = 'R';
+
+Cell other_player(Cell key) {
+    switch(key) {
+    case BotKey:
+        return PlayerKey;
+    case PlayerKey:
+        return BotKey;
+    default:
+        return NoneKey;
+    }
+}
+
+struct Score {
+    int a;
+    int b;
+    int c;
+
+    bool operator==(const Score& other) const {
+        return a == other.a && b == other.b && c == other.c;
+    }
+
+    bool operator<(const Score& other) const {
+        if (a != other.a) return a < other.a;
+        if (b != other.b) return b < other.b;
+        return c < other.c;
+    }
+
+    bool operator>(const Score& other) const {
+        return other < *this;
+    }
+
+    bool operator<=(const Score& other) const {
+        return *this == other || *this < other;
+    }
+
+    bool operator>=(const Score& other) const {
+        return other <= *this;
+    }
+
+    Score operator-() const {
+        return Score{-a, -b, -c};
+    }
+
+    friend std::ostream& operator<<(std::ostream& o, const Score& score) {
+        o << score.a << "," << score.b << "," << score.c;
+        return o;
+    }
+};
+
+struct GridLoc { 
+    int r;
+    int c;
+    bool operator==(const GridLoc& other) const {
+        return r == other.r && c == other.c;
+    }
+
+    friend std::ostream& operator<<(std::ostream& o, const GridLoc& loc) {
+        o << loc.r << "," << loc.c;
+        return o;
+    }
+};
+
+template<>
+struct std::hash<GridLoc> {
+    std::size_t operator()(const GridLoc& f) const {
+        return std::hash<int>{}(f.r) ^ std::hash<int>{}(f.r);
+    }
+};
+
 #endif

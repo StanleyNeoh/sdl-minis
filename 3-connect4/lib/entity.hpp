@@ -16,9 +16,11 @@ struct Entity {
     SDL_Renderer* renderer = NULL;
     SDL_Texture* tex = NULL;
     SDL_PixelFormat* format = NULL;
+    Network* net = NULL;
     SDL_Rect rect{-1, -1, -1, -1};
 
     Entity() = default;
+    Entity(Network& net): net(&net) {}
 
     ~Entity() {
         if (tex != NULL) {
@@ -30,6 +32,7 @@ struct Entity {
             format = NULL;
         }
     }
+
 
     Entity(const Entity& other) = delete;
     Entity(Entity&& other): renderer(other.renderer), tex(other.tex), format(other.format), rect(other.rect) {
@@ -97,6 +100,23 @@ struct Entity {
 
     bool step() { return false; }
 
+    bool handle_network_event() {
+        if (net == NULL) return false;
+        T* self = static_cast<T*>(this);
+        BotEvent e;
+        if (net->bot_events.pop(e)) {
+            switch(e.type) {
+            case NetworkEventType::MOVE:
+                self->handle_move(e.move);
+                return true;
+            case NetworkEventType::GAME_END:
+                self->handle_game_end(e.game_end);
+                return true;
+            }
+        }
+        return false;
+    }
+
     bool handle_event(SDL_Event& e, bool& quit) {
         T* self = static_cast<T*>(this);
         switch(e.type) {
@@ -141,6 +161,8 @@ struct Entity {
     void handle_mouse_up(const SDL_MouseButtonEvent&) {}
     void handle_key_down(const SDL_KeyboardEvent&) {}
     void handle_key_up(const SDL_KeyboardEvent&) {}
+    void handle_move(const Move&) {}
+    void handle_game_end(const GameEnd&) {}
 };
 
 template <int M, int N>
@@ -235,11 +257,11 @@ struct BoardCell: public Entity<BoardCell> {
     static constexpr Color BLUE{0, 0, 255};
     static constexpr Color HIGHLIGHT{0, 255, 0};
 
-    CellKey key = NoneKey;
+    Cell key = NoneKey;
     int final_y = 0;
 
     BoardCell() = default;
-    BoardCell(CellKey key, int final_y): key(key), final_y(final_y) {}
+    BoardCell(Cell key, int final_y): key(key), final_y(final_y) {}
 
     bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
         if (!Par::init(renderer, x, y, w, h)) return false;
@@ -299,16 +321,15 @@ struct Board: public Entity<Board<M, N>> {
     using Par::rect;
     using Par::tex;
     using Par::format;
+    using Par::net;
     
-    Engine& eng;
-
     std::unordered_map<GridLoc, BoardCell> cells;
     BoardFrame<M, N> boardframe;
 
+    Board(Network& net): Par(net) {};
+
     int col_i = -1;
     int winner = NoneKey;
-
-    Board(Engine& eng): eng(eng) {}
 
     bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
         if (!Par::init(renderer, x, y, w, h)) return false;
@@ -317,7 +338,6 @@ struct Board: public Entity<Board<M, N>> {
     }
 
     bool draw() {
-        poll_bot_move();
         for (auto& cell: cells) {;
             if (!cell.second.draw()) return false;
             cell.second.step();
@@ -337,40 +357,27 @@ struct Board: public Entity<Board<M, N>> {
 
     void handle_mouse_up(const SDL_MouseButtonEvent& e) {
         if (winner != NoneKey) return;
-        int r;
-        if (!eng.player_plays(col_i, r)) return;
-        drop_piece(r, col_i, PlayerKey);
-        check_win();
+        if (net != NULL) {
+            net->ui_events.block_push({move: {NetworkEventType::MOVE, PlayerKey, -1, col_i}});
+        }
     }
 
-    bool check_win() {
-        std::vector<GridLoc> marked;
-        winner = eng.query_win(marked);
-        if (winner != NoneKey) {
-            std::cout << "Winner: " << winner << "\n";
-            for (auto& loc: marked) {
-                cells[loc].update_tex(true);
-            }
-            return true;
-        } 
-        return false;
-    }
-
-    void drop_piece(int r, int c, CellKey turn, int start_y = 0) {
+    void handle_move(const Move& move) {
+        int r = move.r;
+        int c = move.c;
         float cw = boardframe.cw;
         float ch = boardframe.ch;
         float tlx = cw * c + boardframe.br;
         float tly = ch * r + boardframe.br;
-        cells[{r, c}] = BoardCell(turn, tly);
-        cells[{r, c}].init(renderer, tlx, start_y, cw, ch);
-    };
+        cells[{r, c}] = BoardCell(move.key, tly);
+        cells[{r, c}].init(renderer, tlx, 0, cw, ch);
+    }
 
-    bool poll_bot_move() {
-        int r, c;
-        if (!eng.query_botmove(r, c)) return false;
-        drop_piece(r, c, BotKey);
-        check_win();
-        return true;
+    void handle_game_end(const GameEnd& game_end) {
+        winner = game_end.winner;
+        for (auto& loc: game_end.marked) {
+            cells[loc].update_tex(true);
+        }
     }
 };
 #endif
