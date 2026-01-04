@@ -2,10 +2,11 @@
 #define LIB_APP_HPP
 
 #include <SDL.h>
+#include <SDL_ttf.h>
 #include <iostream>
 #include <unordered_map>
 
-#include "element.hpp"
+#include "element/element.hpp"
 
 struct App {
     std::unordered_map<const char*, Element*> scenes;
@@ -87,6 +88,7 @@ struct App {
                 scenes[curr_scene]->handle_event(e);
             }
             SDL_RenderClear(renderer);
+            scenes[curr_scene]->step_all();
             scenes[curr_scene]->draw_all();
             SDL_RenderPresent(renderer);
             SDL_Delay(10);

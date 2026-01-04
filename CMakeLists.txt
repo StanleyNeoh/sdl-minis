@@ -26,5 +26,5 @@ add_executable(sketchpad 2-sketchpad/sketchpad.cpp)
 add_executable(connect4 3-connect4/main.cpp)
 
 # 4-snake
-file(GLOB DRAGBOX_SOURCES "4-dragbox/lib/*.cpp")
+file(GLOB DRAGBOX_SOURCES "4-dragbox/lib/**/*.cpp")
 add_executable(dragbox 4-dragbox/main.cpp ${DRAGBOX_SOURCES})

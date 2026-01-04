@@ -1,10 +1,11 @@
-#ifndef LIB_ELEMENT_HPP
-#define LIB_ELEMENT_HPP
+#ifndef LIB_ELEMENT_ELEMENT_HPP
+#define LIB_ELEMENT_ELEMENT_HPP
 
 #include <SDL.h>
-#include <SDL_ttf.h>
 #include <iostream>
 #include <vector>
+#include "math.h"
+#include "../actions/actions.hpp"
 
 struct App;
 struct Element;
@@ -19,7 +20,8 @@ struct Frame {
 
 struct Element {
     // Coordinates of element from global
-    SDL_Rect rect;
+    SDL_FRect rect;
+    float angle = 0.0;
 
     App* app = nullptr;
     std::vector<Frame> uninitalized;
@@ -27,8 +29,14 @@ struct Element {
     Element* last_hover = nullptr;
     bool hovered = false;
 
+    SDL_Texture* tex = NULL;
+    SDL_PixelFormat* format = NULL;
+
     Element() = default;
-    virtual ~Element() = default;
+    virtual ~Element() {
+        if (tex != NULL) SDL_DestroyTexture(tex);
+        if (format != NULL) SDL_FreeFormat(format);
+    };
 
     void add_child(Element* elem, float rel_x, float rel_y, float rel_w, float rel_h) {
         uninitalized.push_back({
@@ -40,7 +48,7 @@ struct Element {
         });
     }
 
-    void init(App& app, float x, float y, float w, float h) {
+    bool init(App& app, float x, float y, float w, float h) {
         this->app = &app;
         rect.x = x;
         rect.y = y;
@@ -51,11 +59,13 @@ struct Element {
             float _y = e.rel_y * h + y;
             float _w = e.rel_w * w;
             float _h = e.rel_h * h;
-            e.elem->init(app, _x, _y, _w, _h);
+            if (!e.elem->init(app, _x, _y, _w, _h)) {
+                return false;
+            }
             children.push_back(e.elem);
         }
         uninitalized.clear();
-        on_mount();
+        return on_mount();
     }
 
     bool is_overlap(const SDL_Point& global_p) const {
@@ -69,22 +79,50 @@ struct Element {
 
     void handle_event(const SDL_Event& event);
 
-    void draw_all() {
-        draw();
+    bool draw_all() {
+        if (!draw()) return false;
         for (Element* e: children) {
-            e->draw();
+            if (!e->draw()) return false;
+        }
+        return true;
+    }
+
+    void translate(float dx, float dy) {
+        rect.x += dx;
+        rect.y += dy;
+        for (Element* e: children) {
+            e->translate(dx, dy);
         }
     }
 
-    void update_rect(int x, int y, int w = -1, int h = -1) {
-        rect.x = x;
-        rect.y = y;
-        if (w >= 0) rect.w = w;
-        if (h >= 0) rect.h = h;
+    void rotate(float deg) {
+        angle = fmod(angle + deg, 360);
+        for (Element* e: children) {
+            e->rotate(deg);
+        }
     }
 
-    virtual void on_mount() {}
-    virtual void draw() {}
+    void update_pos(float x, float y) {
+        translate(x - rect.x, y - rect.y);
+    }
+
+    void update_rot(float angle) {
+        rotate(angle - this->angle);
+    }
+
+    bool step_all() {
+        if (!step()) return false;
+        for (Element* e: children) {
+            if (!e->step_all()) return false;
+        }
+        return true;
+    }
+
+    virtual bool handle_action(const Action& action) { return true; }
+    virtual bool on_mount() { return true; }
+    virtual bool step() { return true; }
+    virtual bool draw() { return true; }
+    virtual void handle_hover(const SDL_Event&){}
     virtual void handle_unhover(const SDL_Event&){}
     virtual void handle_quit(const SDL_QuitEvent&) {}
     virtual void handle_mouse_scroll(const SDL_MouseWheelEvent&) {}
@@ -95,46 +133,5 @@ struct Element {
     virtual void handle_key_up(const SDL_KeyboardEvent&) {}
 };
 
-struct Text: Element {
-    TTF_Font* font;
-    const char* text;
-    SDL_Color color;
-    SDL_Color hl_color;
-
-    // Managed
-    SDL_Texture* tex = NULL;
-
-    Text(
-        const char* text, 
-        TTF_Font* font,
-        SDL_Color color = {0, 0, 0, 255},
-        SDL_Color hl_color = {0, 0, 255, 255}
-    ): text(text), font(font), color(color), hl_color(hl_color) {}
-
-    virtual ~Text() override {
-        if (tex != NULL) {
-            SDL_DestroyTexture(tex);
-        }
-    }
-
-    void reload_text(TTF_Font* font, const char* text, SDL_Color& color);
-
-    virtual void on_mount() override;
-    virtual void draw() override;
-    virtual void handle_unhover(const SDL_Event&) override;
-    virtual void handle_mouse_down(const SDL_MouseButtonEvent&) override;
-    virtual void handle_mouse_up(const SDL_MouseButtonEvent&) override;
-};
-
-struct DragBox: Element {
-    // State
-    SDL_Point focus_off = {-1, -1};
-
-    DragBox() = default;
-    virtual ~DragBox() = default;
-
-    virtual void handle_mouse_motion(const SDL_MouseMotionEvent& e) override;
-    virtual void handle_mouse_down(const SDL_MouseButtonEvent& e) override;
-};
 
 #endif
