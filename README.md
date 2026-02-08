@@ -19,4 +19,8 @@ This repository contains simple projects demonstrating the use of SDL2.
   - Multithreaded to keep the UI responsive during AI calculations.
   - Animated piece dropping effect.
   - To run, execute `./3-connect4` from the build folder.
+- `4-dragbox`: A simple drag-and-drop box for trying out SDL2 TTF
+  - To run, execute `./4-dragbox` from the build folder.
+- `5-snake`: Snake game using ImGui for menu screens
+  - To run, execute `./5-snake` from the build folder.
 - More to come...

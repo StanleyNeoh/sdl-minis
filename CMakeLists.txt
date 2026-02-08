@@ -14,6 +14,20 @@ if (TARGET SDL2_ttf::SDL2_ttf)
     link_libraries(SDL2_ttf::SDL2_ttf)
 endif()
 
+# Add the vendored imgui library
+include_directories("vendored/imgui")
+include_directories("vendored/imgui/backends")
+add_library(imgui_lib 
+    vendored/imgui/imgui.cpp
+    vendored/imgui/imgui_demo.cpp
+    vendored/imgui/imgui_draw.cpp
+    vendored/imgui/imgui_tables.cpp
+    vendored/imgui/imgui_widgets.cpp
+    vendored/imgui/backends/imgui_impl_sdl2.cpp
+    vendored/imgui/backends/imgui_impl_sdlrenderer2.cpp
+)
+link_libraries(imgui_lib)
+
 add_compile_definitions(BLOB_DIR=\"${CMAKE_SOURCE_DIR}/blobs/\")
 
 # 1-stamp
@@ -25,6 +39,9 @@ add_executable(sketchpad 2-sketchpad/sketchpad.cpp)
 # 3-connect4
 add_executable(connect4 3-connect4/main.cpp)
 
-# 4-snake
+# 4-dragbox
 file(GLOB DRAGBOX_SOURCES "4-dragbox/lib/**/*.cpp")
 add_executable(dragbox 4-dragbox/main.cpp ${DRAGBOX_SOURCES})
+
+# 5-snake
+add_executable(snake 5-snake/snake.cpp)
