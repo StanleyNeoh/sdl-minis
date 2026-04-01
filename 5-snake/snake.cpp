@@ -105,6 +105,8 @@ struct SnakeGame {
     Vec2 dir{1, 0};
     SDL_Texture* tex = NULL;
 
+    bool _changing_dir = false;
+
     ~SnakeGame() {
         if (tex) {
             SDL_DestroyTexture(tex);
@@ -193,34 +195,39 @@ struct SnakeGame {
         }
         grid_set(next_pos, SNAKE);
         body.push_front(next_pos);
+        _changing_dir = false;
         return true;
     }
 
     bool move_up() {
-        if (dir[1] != 0) return false;
+        if (_changing_dir || dir[1] != 0) return false;
         dir[0] = 0;
         dir[1] = -1;
+        _changing_dir = true;
         return true;
     }
 
     bool move_down() {
-        if (dir[1] != 0) return false;
+        if (_changing_dir || dir[1] != 0) return false;
         dir[0] = 0;
         dir[1] = 1;
+        _changing_dir = true;
         return true;
     }
 
     bool move_left() {
-        if (dir[0] != 0) return false;
+        if (_changing_dir || dir[0] != 0) return false;
         dir[0] = -1;
         dir[1] = 0;
+        _changing_dir = true;
         return true;
     }
 
     bool move_right() {
-        if (dir[0] != 0) return false;
+        if (_changing_dir || dir[0] != 0) return false;
         dir[0] = 1;
         dir[1] = 0;
+        _changing_dir = true;
         return true;
     }
 
@@ -281,6 +288,7 @@ int main() {
     int cell_size = 5;
     int grid_size[2] = {32, 32};
     SDL_Rect game_rect{win_w/8, win_h/8, 6*win_w/8, 6*win_h/8};
+    size_t tick = 0;
 
     bool done = false;
     while (!done)
@@ -331,7 +339,7 @@ int main() {
         }
         if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED)
         {
-            SDL_Delay(10);
+            SDL_Delay(100);
             continue;
         }
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0); // Transparent if blend mode allows
@@ -417,10 +425,13 @@ int main() {
                 ImGui::Render();
                 ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
             } else {
-                if (!snake.step()) {
-                    game_state = GameState::game_over;
+                if (tick > 10) {
+                    if (!snake.step()) {
+                        game_state = GameState::game_over;
+                    }
                 }
-                SDL_Delay(100);
+                tick++;
+                SDL_Delay(10);
             }
         }
         SDL_RenderSetScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
