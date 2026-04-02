@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.14)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF) # Optional: Use OFF for strict standard C++
@@ -34,21 +34,10 @@ link_libraries(imgui_lib)
 
 add_compile_definitions(BLOB_DIR=\"${CMAKE_SOURCE_DIR}/blobs/\")
 
-# 1-stamp
-add_executable(stamp 1-stamp/stamp.cpp)
-
-# 2-sketchpad
-add_executable(sketchpad 2-sketchpad/sketchpad.cpp)
-
-# 3-connect4
-add_executable(connect4 3-connect4/main.cpp)
-
-# 4-dragbox
-file(GLOB DRAGBOX_SOURCES "4-dragbox/lib/**/*.cpp")
-add_executable(dragbox 4-dragbox/main.cpp ${DRAGBOX_SOURCES})
-
-# 5-snake
-add_executable(snake 5-snake/snake.cpp)
-
-# 6-particlebox
-add_executable(particlebox 6-particlebox/particlebox.cpp)
+# Projects
+add_subdirectory(1-stamp)
+add_subdirectory(2-sketchpad)
+add_subdirectory(3-connect4)
+add_subdirectory(4-dragbox)
+add_subdirectory(5-snake)
+add_subdirectory(6-particlebox)
