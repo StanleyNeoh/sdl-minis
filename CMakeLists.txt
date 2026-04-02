@@ -34,6 +34,19 @@ FetchContent_Declare(
 )
 FetchContent_Populate(imgui)
 
+# GoogleTest
+FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG v1.14.0
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendored/googletest
+)
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+enable_testing()
+
 link_libraries(SDL2::SDL2)
 if(TARGET SDL2::SDL2main)
     link_libraries(SDL2::SDL2main)
