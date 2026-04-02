@@ -5,9 +5,34 @@ set(CMAKE_CXX_EXTENSIONS OFF) # Optional: Use OFF for strict standard C++
 
 project(sdl-minis)
 
-# Add the vendored SDL library
-add_subdirectory(vendored/SDL EXCLUDE_FROM_ALL)
-add_subdirectory(vendored/SDL_ttf EXCLUDE_FROM_ALL)
+include(FetchContent)
+
+# SDL2
+FetchContent_Declare(
+    SDL2
+    GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+    GIT_TAG release-2.32.10
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendored/SDL
+)
+FetchContent_MakeAvailable(SDL2)
+
+# SDL2_ttf
+FetchContent_Declare(
+    SDL2_ttf
+    GIT_REPOSITORY https://github.com/libsdl-org/SDL_ttf.git
+    GIT_TAG release-2.24.0
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendored/SDL_ttf
+)
+FetchContent_MakeAvailable(SDL2_ttf)
+
+# imgui
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG v1.92.5
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendored/imgui
+)
+FetchContent_Populate(imgui)
 
 link_libraries(SDL2::SDL2)
 if(TARGET SDL2::SDL2main)
@@ -19,17 +44,18 @@ if (TARGET SDL2_ttf::SDL2_ttf)
 endif()
 
 # Add the vendored imgui library
-include_directories("vendored/imgui")
-include_directories("vendored/imgui/backends")
+include_directories("${imgui_SOURCE_DIR}")
+include_directories("${imgui_SOURCE_DIR}/backends")
 add_library(imgui_lib 
-    vendored/imgui/imgui.cpp
-    vendored/imgui/imgui_demo.cpp
-    vendored/imgui/imgui_draw.cpp
-    vendored/imgui/imgui_tables.cpp
-    vendored/imgui/imgui_widgets.cpp
-    vendored/imgui/backends/imgui_impl_sdl2.cpp
-    vendored/imgui/backends/imgui_impl_sdlrenderer2.cpp
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer2.cpp
 )
+target_link_libraries(imgui_lib PRIVATE SDL2::SDL2)
 link_libraries(imgui_lib)
 
 add_compile_definitions(BLOB_DIR=\"${CMAKE_SOURCE_DIR}/blobs/\")
