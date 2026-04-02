@@ -1,4 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF) # Optional: Use OFF for strict standard C++
+
 project(sdl-minis)
 
 # Add the vendored SDL library
@@ -45,3 +49,6 @@ add_executable(dragbox 4-dragbox/main.cpp ${DRAGBOX_SOURCES})
 
 # 5-snake
 add_executable(snake 5-snake/snake.cpp)
+
+# 6-particlebox
+add_executable(particlebox 6-particlebox/particlebox.cpp)
