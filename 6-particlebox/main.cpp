@@ -6,9 +6,6 @@ void NewFrame() {
     ImGui_ImplSDLRenderer2_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
-    // ImGuiViewport* viewport = ImGui::GetMainViewport();
-    // ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Once, ImVec2(0.5f, 0.5f));
-    // ImGui::SetNextWindowSize(ImVec2(viewport->Size.x * 0.5f, viewport->Size.y * 0.5f));
 }
 
 int main() {
@@ -21,7 +18,7 @@ int main() {
     bool paused = false;
     float rad = 1.0;
     int num_particles = 100;
-    int steps_per_sec = 100;
+    int steps_per_sec = 10;
     int padding = 20;
     SDL_Rect content_rect{padding, padding, UI::win_w-2*padding, UI::win_h-2*padding};
     Uint64 last_time = SDL_GetPerformanceCounter();
@@ -53,8 +50,8 @@ int main() {
         if (ImGui::Button(paused ? "Resume" : "Pause")) {
             paused = !paused;
         }
-        ImGui::SliderInt("Count", &num_particles, 1, 1000);
-        ImGui::SliderInt("Steps/sec", &steps_per_sec, 1, 1000);
+        ImGui::SliderInt("Count", &num_particles, 1, 10000);
+        ImGui::SliderInt("Steps/sec", &steps_per_sec, 1, 100);
         ImGui::SliderFloat("Radius", &rad, 0.1, 50.0);
         ImGui::End();
         ImGui::Render();
