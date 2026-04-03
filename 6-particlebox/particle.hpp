@@ -12,13 +12,12 @@ struct Particle {
     float y = 0.0;
     float vx = 0.0;
     float vy = 0.0;
-    float rad = 1.0;
     u_int8_t r = 255, g = 255, b = 255;
 
-    bool is_overlap(const Particle& other) const {
+    bool is_overlap(const Particle& other, float rad) const {
         float dx = x - other.x;
         float dy = y - other.y;
-        float d = rad + other.rad;
+        float d = rad + rad;
         return dx * dx + dy * dy < d * d;
     }
 
@@ -27,7 +26,7 @@ struct Particle {
         y += vy;
     }
 
-    bool resolve_wall_collision(float w, float h) {
+    bool resolve_wall_collision(float w, float h, float rad) {
         bool resolved = false;
         if ((x + rad > w && vx > 0) || (x - rad < 0 && vx < 0)) {
             vx = -vx;
@@ -40,7 +39,7 @@ struct Particle {
         return resolved;
     }
 
-    friend bool resolve_collision(Particle& p1, Particle& p2) {
+    friend bool resolve_collision(Particle& p1, Particle& p2, float rad) {
         float dx = p2.x - p1.x;
         float dy = p2.y - p1.y;
         float dvx = p2.vx - p1.vx;
@@ -66,23 +65,31 @@ struct ParticleBox {
     SDL_Texture* particle_tex = NULL;
     int w = 1000;
     int h = 1000;
+    float rad = 1.0;
     std::vector<Particle> particles;
 
     ParticleBox(SDL_Renderer* renderer, SDL_Texture* particle_tex, int w, int h): particle_tex(particle_tex), w(w), h(h) {
         tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w, h);
     }
 
-    void random_init(int num_particles) {
-        for (int i = 0; i < num_particles; i++) {
-            float rad = 10.0;
-            float x = get_rand_float(rad, w - rad);
-            float y = get_rand_float(rad, h - rad);
-            float vx = get_rand_float(-2.0, 2.0);
-            float vy = get_rand_float(-2.0, 2.0);
-            u_int8_t r = get_rand_int(20, 255);
-            u_int8_t g = get_rand_int(20, 255);
-            u_int8_t b = get_rand_int(20, 255);
-            particles.emplace_back(Particle{x: x, y: y, vx: vx, vy: vy, rad: 10.0, r: r, g: g, b: b});
+    void meet_target(int target_num) {
+        int req = target_num - static_cast<int>(particles.size());
+        if (req > 0) {
+            for (int i = 0; i < req; i++) {
+                float rad = 10.0;
+                float x = get_rand_float(rad, w - rad);
+                float y = get_rand_float(rad, h - rad);
+                float vx = get_rand_float(-2.0, 2.0);
+                float vy = get_rand_float(-2.0, 2.0);
+                u_int8_t r = get_rand_int(20, 255);
+                u_int8_t g = get_rand_int(20, 255);
+                u_int8_t b = get_rand_int(20, 255);
+                particles.emplace_back(Particle{x: x, y: y, vx: vx, vy: vy, r: r, g: g, b: b});
+            }
+        } else if (req < 0) {
+            for (int i = 0; i < -req; i++) {
+                particles.pop_back();
+            }
         }
     }
 
@@ -96,7 +103,7 @@ struct ParticleBox {
         while (!no_collision) {
             no_collision = true;
             for (int i = 0; i < n; i++) {
-                if (particles[i].resolve_wall_collision(w, h)) {
+                if (particles[i].resolve_wall_collision(w, h, rad)) {
                     no_collision = false;
                 }
             }
@@ -105,7 +112,7 @@ struct ParticleBox {
                 for (int j = i+1; j < n; j++) {
                     auto& p1 = particles[i];
                     auto& p2 = particles[j];
-                    if (p1.is_overlap(p2) && resolve_collision(p1, p2)) {
+                    if (p1.is_overlap(p2, rad) && resolve_collision(p1, p2, rad)) {
                         no_collision = false;
                     }
                 }
@@ -119,7 +126,7 @@ struct ParticleBox {
         SDL_RenderClear(renderer);
         for (auto& p: particles) {
             SDL_SetTextureColorMod(particle_tex, p.r, p.g, p.b);
-            SDL_FRect rect{p.x - p.rad, p.y - p.rad, p.rad * 2, p.rad * 2};
+            SDL_FRect rect{p.x - rad, p.y - rad, rad * 2, rad * 2};
             SDL_RenderCopyF(renderer, particle_tex, NULL, &rect);
         }
         SDL_SetRenderTarget(renderer, NULL);
