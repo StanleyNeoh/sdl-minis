@@ -1,3 +1,1 @@
-add_executable(particlebox main.cpp)
-
-add_subdirectory(tests)
+add_executable(particlebox main.cpp utils.cpp)

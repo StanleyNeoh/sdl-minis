@@ -1,22 +1,22 @@
 #include "ui.hpp"
+#include "textures.hpp"
 #include "particle.hpp"
 
 int main() {
     UI::UI ui;
-    Entity::ParticleBox pb(1280, 800);
+    Circle<100, 100> circle(UI::renderer);
+
+    ParticleBox pb(UI::renderer, circle.tex, 1280, 800);
     pb.random_init(100);
-    pb.init_tex(UI::renderer);
-    for (auto& p: pb.particles) {
-        p.init_tex(UI::renderer);
-    }
 
     bool done = false;
+    int padding = 20;
+    SDL_Rect content_rect{padding, padding, UI::win_w-2*padding, UI::win_h-2*padding};
     while (!done)
     {
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
-            ImGui_ImplSDL2_ProcessEvent(&event);
             switch (event.type) {
                 case SDL_QUIT:
                     done = true;
@@ -26,15 +26,10 @@ int main() {
         SDL_SetRenderDrawColor(UI::renderer, 0, 0, 0, 0);
         SDL_RenderClear(UI::renderer);
 
-        pb.render(UI::renderer, NULL);
-        pb.step();
-
+        SDL_Texture* tex = pb.render(UI::renderer);
+        SDL_RenderCopy(UI::renderer, tex, NULL, &content_rect);
         SDL_RenderPresent(UI::renderer);
+        pb.step();
         SDL_Delay(10);
-    }
-
-    pb.destroy_tex();
-    for (auto& p: pb.particles) {
-        p.destroy_tex();
     }
 }
