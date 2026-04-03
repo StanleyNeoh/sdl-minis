@@ -50,9 +50,9 @@ int main() {
         if (ImGui::Button(paused ? "Resume" : "Pause")) {
             paused = !paused;
         }
-        ImGui::SliderInt("Count", &num_particles, 1, 10000);
+        ImGui::SliderInt("Count", &num_particles, 1, 20000);
         ImGui::SliderInt("Steps/sec", &steps_per_sec, 1, 100);
-        ImGui::SliderFloat("Radius", &rad, 0.1, 50.0);
+        ImGui::SliderFloat("Radius", &rad, 0.1, 20.0);
         ImGui::End();
         ImGui::Render();
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), UI::renderer);

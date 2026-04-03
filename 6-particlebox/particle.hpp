@@ -5,7 +5,6 @@
 
 #include <array>
 #include <iostream>
-#include <memory>
 #include <random>
 #include <utility>
 #include <vector>
@@ -93,88 +92,183 @@ struct QuadRect {
     }
 };
 
-struct QuadTree {
+struct QuadTreeArena {
+    struct Node {
+        QuadRect boundary;
+        int depth = 0;
+        int children[4] = {-1, -1, -1, -1};
+        int chunk = -1;       // first chunk index
+        int chunk_tail = -1;  // last chunk index (for O(1) append)
+        int total_count = 0;
+    };
+
+    // Each chunk: [capacity] index slots + 1 next-chunk slot.
+    // chunk_pool layout: [idx0, idx1, ..., idx(cap-1), next_chunk] repeated.
     static constexpr int kDefaultCapacity = 8;
     static constexpr int kDefaultMaxDepth = 8;
+    static constexpr int kInitialNodes = 8192;
+    static constexpr int kInitialChunks = 16384;
 
-    const std::vector<Particle>& particles;
-    QuadRect boundary;
-    int depth = 0;
-    int capacity = kDefaultCapacity;
+    int chunk_stride = kDefaultCapacity + 1;
+
+    std::vector<Node> nodes;
+    std::vector<int> chunk_pool;  // flat array of chunks, each chunk_stride ints
+    int node_count = 0;
+    int chunk_count = 0;
+    const std::vector<Particle>* particles = nullptr;
+    int node_capacity = kDefaultCapacity;
     int max_depth = kDefaultMaxDepth;
-    std::vector<int> indices;
-    std::array<std::unique_ptr<QuadTree>, 4> children;
 
-    QuadTree(const std::vector<Particle>& particles, QuadRect boundary, int depth = 0,
-             int capacity = kDefaultCapacity, int max_depth = kDefaultMaxDepth)
-        : particles(particles), boundary(boundary), depth(depth), capacity(capacity), max_depth(max_depth) {}
-
-    bool is_leaf() const {
-        return children[0] == nullptr;
+    QuadTreeArena() {
+        nodes.resize(kInitialNodes);
+        chunk_pool.resize(kInitialChunks * chunk_stride);
     }
 
-    bool insert(int particle_idx) {
+    void reset(const std::vector<Particle>& p, QuadRect root_boundary,
+               int capacity = kDefaultCapacity, int max_depth_val = kDefaultMaxDepth) {
+        particles = &p;
+        node_capacity = capacity;
+        chunk_stride = capacity + 1;
+        max_depth = max_depth_val;
+        node_count = 0;
+        chunk_count = 0;
+        alloc_node(root_boundary, 0);
+    }
+
+    int alloc_chunk() {
+        int idx = chunk_count++;
+        if (idx * chunk_stride + chunk_stride > static_cast<int>(chunk_pool.size())) {
+            chunk_pool.resize(chunk_pool.size() * 2);
+        }
+        chunk_pool[idx * chunk_stride + node_capacity] = -1; // next = none
+        return idx;
+    }
+
+    int alloc_node(QuadRect boundary, int depth) {
+        int idx = node_count++;
+        if (idx >= static_cast<int>(nodes.size())) {
+            nodes.resize(nodes.size() * 2);
+        }
+        auto& node = nodes[idx];
+        node.boundary = boundary;
+        node.depth = depth;
+        node.children[0] = node.children[1] = node.children[2] = node.children[3] = -1;
+        node.chunk = -1;
+        node.chunk_tail = -1;
+        node.total_count = 0;
+        return idx;
+    }
+
+    void push_index(int node_idx, int particle_idx) {
+        auto& node = nodes[node_idx];
+        int pos_in_chunk = node.total_count % node_capacity;
+        if (pos_in_chunk == 0) {
+            // Need a new chunk.
+            int new_chunk = alloc_chunk();
+            if (node.chunk_tail >= 0) {
+                chunk_pool[node.chunk_tail * chunk_stride + node_capacity] = new_chunk;
+            } else {
+                node.chunk = new_chunk;
+            }
+            node.chunk_tail = new_chunk;
+        }
+        chunk_pool[node.chunk_tail * chunk_stride + pos_in_chunk] = particle_idx;
+        node.total_count++;
+    }
+
+    bool is_leaf(int node_idx) const {
+        return nodes[node_idx].children[0] == -1;
+    }
+
+    bool insert(int node_idx, int particle_idx) {
         const auto& p = (*particles)[particle_idx];
-        if (!boundary.contains(p.x, p.y)) {
+        if (!nodes[node_idx].boundary.contains(p.x, p.y)) {
             return false;
         }
 
-        if (static_cast<int>(indices.size()) < capacity || depth >= max_depth) {
-            indices.push_back(particle_idx);
+        if (nodes[node_idx].total_count < node_capacity || nodes[node_idx].depth >= max_depth) {
+            push_index(node_idx, particle_idx);
             return true;
         }
 
-        if (is_leaf()) {
-            subdivide();
+        if (is_leaf(node_idx)) {
+            subdivide(node_idx);
         }
 
-        for (auto& child : children) {
-            if (child->insert(particle_idx)) {
+        for (int ci = 0; ci < 4; ci++) {
+            if (insert(nodes[node_idx].children[ci], particle_idx)) {
                 return true;
             }
         }
 
         // Fallback for precision edge cases near child boundaries.
-        indices.push_back(particle_idx);
+        push_index(node_idx, particle_idx);
         return true;
     }
 
-    void query(const QuadRect& range, std::vector<int>& out) const {
-        if (!boundary.intersects(range)) {
+    void query(int node_idx, const QuadRect& range, std::vector<int>& out) const {
+        const auto& node = nodes[node_idx];
+        if (!node.boundary.intersects(range)) {
             return;
         }
 
-        for (int idx : indices) {
-            const auto& p = (*particles)[idx];
-            if (range.contains(p.x, p.y)) {
-                out.push_back(idx);
+        int remaining = node.total_count;
+        int c = node.chunk;
+        while (c >= 0 && remaining > 0) {
+            int n = remaining < node_capacity ? remaining : node_capacity;
+            const int* base = &chunk_pool[c * chunk_stride];
+            for (int i = 0; i < n; i++) {
+                const auto& p = (*particles)[base[i]];
+                if (range.contains(p.x, p.y)) {
+                    out.push_back(base[i]);
+                }
             }
+            remaining -= n;
+            c = chunk_pool[c * chunk_stride + node_capacity];
         }
 
-        if (is_leaf()) {
+        if (is_leaf(node_idx)) {
             return;
         }
 
-        for (const auto& child : children) {
-            child->query(range, out);
+        for (int ci = 0; ci < 4; ci++) {
+            query(node.children[ci], range, out);
         }
     }
 
-    void subdivide() {
-        float half_w = boundary.w * 0.5f;
-        float half_h = boundary.h * 0.5f;
-        float x = boundary.x;
-        float y = boundary.y;
+    void subdivide(int node_idx) {
+        float half_w = nodes[node_idx].boundary.w * 0.5f;
+        float half_h = nodes[node_idx].boundary.h * 0.5f;
+        float bx = nodes[node_idx].boundary.x;
+        float by = nodes[node_idx].boundary.y;
+        int next_depth = nodes[node_idx].depth + 1;
 
-        children[0] = std::make_unique<QuadTree>(particles, QuadRect{x, y, half_w, half_h}, depth + 1, capacity, max_depth);
-        children[1] = std::make_unique<QuadTree>(particles, QuadRect{x + half_w, y, half_w, half_h}, depth + 1, capacity, max_depth);
-        children[2] = std::make_unique<QuadTree>(particles, QuadRect{x, y + half_h, half_w, half_h}, depth + 1, capacity, max_depth);
-        children[3] = std::make_unique<QuadTree>(particles, QuadRect{x + half_w, y + half_h, half_w, half_h}, depth + 1, capacity, max_depth);
+        // Collect old indices before re-inserting.
+        int old_count = nodes[node_idx].total_count;
+        int old_chunk = nodes[node_idx].chunk;
 
-        auto moved_indices = std::move(indices);
-        indices.clear();
-        for (int idx : moved_indices) {
-            insert(idx);
+        int c0 = alloc_node(QuadRect{bx, by, half_w, half_h}, next_depth);
+        int c1 = alloc_node(QuadRect{bx + half_w, by, half_w, half_h}, next_depth);
+        int c2 = alloc_node(QuadRect{bx, by + half_h, half_w, half_h}, next_depth);
+        int c3 = alloc_node(QuadRect{bx + half_w, by + half_h, half_w, half_h}, next_depth);
+
+        nodes[node_idx].children[0] = c0;
+        nodes[node_idx].children[1] = c1;
+        nodes[node_idx].children[2] = c2;
+        nodes[node_idx].children[3] = c3;
+        nodes[node_idx].chunk = -1;
+        nodes[node_idx].chunk_tail = -1;
+        nodes[node_idx].total_count = 0;
+
+        int remaining = old_count;
+        int c = old_chunk;
+        while (c >= 0 && remaining > 0) {
+            int n = remaining < node_capacity ? remaining : node_capacity;
+            for (int i = 0; i < n; i++) {
+                insert(node_idx, chunk_pool[c * chunk_stride + i]);
+            }
+            remaining -= n;
+            c = chunk_pool[c * chunk_stride + node_capacity];
         }
     }
 };
@@ -186,6 +280,8 @@ struct ParticleBox {
     int h = 1000;
     float rad = 1.0f;
     std::vector<Particle> particles;
+    QuadTreeArena quadtree;
+    std::vector<std::pair<int, int>> candidate_pairs;
 
     ParticleBox(SDL_Renderer* renderer, SDL_Texture* particle_tex, int w, int h)
         : particle_tex(particle_tex), w(w), h(h) {
@@ -223,13 +319,12 @@ struct ParticleBox {
         }
 
         // Build potential collision pairs once from positions, then iterate for stable velocity resolution.
-        QuadTree quadtree(&particles, QuadRect{0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h)});
+        quadtree.reset(particles, QuadRect{0.0f, 0.0f, static_cast<float>(w), static_cast<float>(h)});
         for (int i = 0; i < n; i++) {
-            quadtree.insert(i);
+            quadtree.insert(0, i);
         }
 
-        std::vector<std::pair<int, int>> candidate_pairs;
-        candidate_pairs.reserve(static_cast<size_t>(n) * 8);
+        candidate_pairs.clear();
         float overlap_dist = rad * 2.0f;
 
 #ifdef _OPENMP
@@ -245,7 +340,7 @@ struct ParticleBox {
             for (int i = 0; i < n; i++) {
                 const auto& p = particles[i];
                 nearby_indices.clear();
-                quadtree.query(QuadRect{p.x - overlap_dist, p.y - overlap_dist, overlap_dist * 2.0f, overlap_dist * 2.0f}, nearby_indices);
+                quadtree.query(0, QuadRect{p.x - overlap_dist, p.y - overlap_dist, overlap_dist * 2.0f, overlap_dist * 2.0f}, nearby_indices);
                 for (int j : nearby_indices) {
                     if (j > i) {
                         local_pairs.emplace_back(i, j);
@@ -263,7 +358,7 @@ struct ParticleBox {
         for (int i = 0; i < n; i++) {
             const auto& p = particles[i];
             nearby_indices.clear();
-            quadtree.query(QuadRect{p.x - overlap_dist, p.y - overlap_dist, overlap_dist * 2.0f, overlap_dist * 2.0f}, nearby_indices);
+            quadtree.query(0, QuadRect{p.x - overlap_dist, p.y - overlap_dist, overlap_dist * 2.0f, overlap_dist * 2.0f}, nearby_indices);
             for (int j : nearby_indices) {
                 if (j > i) {
                     candidate_pairs.emplace_back(i, j);
