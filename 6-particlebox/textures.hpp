@@ -11,6 +11,7 @@ struct Circle {
     Circle(SDL_Renderer* renderer) {
         if (tex != NULL) return;
         tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, W, H);
+        SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
         std::vector<Uint32> pixels(W * H);
         int pitch = W * sizeof(u_int32_t);
         float wr = static_cast<float>(W) / 2;

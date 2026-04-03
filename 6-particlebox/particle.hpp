@@ -115,7 +115,7 @@ struct ParticleBox {
 
     SDL_Texture* render(SDL_Renderer* renderer) {
         SDL_SetRenderTarget(renderer, tex);
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_SetRenderDrawColor(renderer, 20, 20, 20, 255);
         SDL_RenderClear(renderer);
         for (auto& p: particles) {
             SDL_SetTextureColorMod(particle_tex, p.r, p.g, p.b);
