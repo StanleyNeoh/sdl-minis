@@ -12,18 +12,16 @@ struct Particle {
     Particle(const Vec<T, N> p, const Vec<T, N> v, T rad): pos(p), vel(v), rad(rad) {}
 
     template <size_t D = 2>
-    bool is_overlap(const Particle<T, N>& other) {
+    bool is_overlap(const Particle<T, N>& other) const {
         return pos.template dist<D>(other.pos) < pow<T, D>(rad + other.rad);
     }
 
-    bool is_approaching(const Particle<T, N>& other) {
-        Vec<T, N> p = other.pos - pos;
-        Vec<T, N> v = other.vel - vel;
-        return p.dot(v) < -0.0001f;
+    bool is_approaching(const Particle<T, N>& other) const {
+        return (other.pos - pos).dot(other.vel - vel) < static_cast<T>(-0.0001);
     }
 
-    bool is_colliding(const Particle<T, N>& other) {
-        return is_overlap(other) & is_approaching(other);
+    bool is_colliding(const Particle<T, N>& other) const {
+        return is_overlap(other) && is_approaching(other);
     }
 
     void step() {
@@ -39,7 +37,7 @@ struct Particle {
         Vec<T, N> dp = p2.pos - p1.pos;
         Vec<T, N> dv = p2.vel - p1.vel;
         T dot_product = dv.dot(dp);
-        if (dot_product >= 0) dot_product = 0;
+        if (dot_product >= 0) return;
         T collision_scale = dot_product / dp.template len<2>();
         Vec<T, N> delta = collision_scale * dp;
         p1.vel += delta;
