@@ -12,17 +12,19 @@ int main() {
     UI::UI ui;
     Circle<100, 100> circle(UI::renderer);
 
-    ParticleBox pb(UI::renderer, circle.tex, 1280, 800);
+    ParticleBox<QuadTree> pb(UI::renderer, circle.tex, 1280, 800);
+    ParticleBox<QuadTreeArena> pb_arena(UI::renderer, circle.tex, 1280, 800);
 
     bool done = false;
     bool paused = false;
-    float rad = 1.0;
+    bool use_arena = true;
+    int mt_mode = 1;
+    float min_rad = 1.0f;
+    float max_rad = 5.0f;
     int num_particles = 100;
-    int steps_per_sec = 10;
+    int min_frame_time_ms = 16;
     int padding = 20;
     SDL_Rect content_rect{padding, padding, UI::win_w-2*padding, UI::win_h-2*padding};
-    Uint64 last_time = SDL_GetPerformanceCounter();
-    double step_accumulator = 0.0;
     while (!done)
     {
         SDL_Event event;
@@ -38,36 +40,54 @@ int main() {
         SDL_SetRenderDrawColor(UI::renderer, 0, 0, 0, 0);
         SDL_RenderClear(UI::renderer);
 
-        pb.rad = rad;
-        pb.meet_target(num_particles);
-        SDL_Texture* tex = pb.render(UI::renderer);
-        SDL_RenderCopy(UI::renderer, tex, NULL, &content_rect);
+        auto step_and_render = [&](auto& active_pb) {
+            active_pb.min_rad = min_rad;
+            active_pb.max_rad = max_rad;
+            active_pb.meet_target(num_particles);
+            SDL_Texture* tex = active_pb.render(UI::renderer);
+            SDL_RenderCopy(UI::renderer, tex, NULL, &content_rect);
 
-        NewFrame();
-        ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-        ImGui::Text("Particles: %d", (int)pb.particles.size());
-        ImGui::SameLine();
-        if (ImGui::Button(paused ? "Resume" : "Pause")) {
-            paused = !paused;
-        }
-        ImGui::SliderInt("Count", &num_particles, 1, 20000);
-        ImGui::SliderInt("Steps/sec", &steps_per_sec, 1, 100);
-        ImGui::SliderFloat("Radius", &rad, 0.1, 20.0);
-        ImGui::End();
-        ImGui::Render();
-        ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), UI::renderer);
-
-        SDL_RenderPresent(UI::renderer);
-
-        Uint64 now = SDL_GetPerformanceCounter();
-        double elapsed_sec = (double)(now - last_time) / SDL_GetPerformanceFrequency();
-        last_time = now;
-        if (!paused) {
-            step_accumulator += elapsed_sec * steps_per_sec;
-            while (step_accumulator >= 1.0) {
-                pb.step();
-                step_accumulator -= 1.0;
+            NewFrame();
+            ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+            ImGui::Text("Particles: %d", (int)active_pb.particles.size());
+            ImGui::SameLine();
+            if (ImGui::Button(paused ? "Resume" : "Pause")) {
+                paused = !paused;
             }
+            ImGui::Checkbox("Use Arena", &use_arena);
+            const char* mt_modes[] = {"None", "Graph Coloring", "Mutex Locks", "Unsafe (No Lock)", "Naive (N^2)"};
+            ImGui::Combo("MT Mode", &mt_mode, mt_modes, IM_ARRAYSIZE(mt_modes));
+            int max_particles = (static_cast<MTMode>(mt_mode) == MTMode::naive) ? NAIVE_MAX_PARTICLES : 50000;
+            if (num_particles > max_particles) num_particles = max_particles;
+            ImGui::SliderInt("Count", &num_particles, 1, max_particles);
+            ImGui::SliderInt("Min frame time (ms)", &min_frame_time_ms, 1, 100);
+            ImGui::SliderFloat("Min Radius", &min_rad, 0.1f, 20.0f);
+            ImGui::SliderFloat("Max Radius", &max_rad, 0.1f, 20.0f);
+            if (min_rad > max_rad) min_rad = max_rad;
+            ImGui::Separator();
+            ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+            ImGui::Text("Node pool: %d / %d", active_pb.quadtree.pool_node_used(), active_pb.quadtree.pool_node_capacity());
+            ImGui::Text("Index pool: %d / %d", active_pb.quadtree.pool_indices_used(), active_pb.quadtree.pool_indices_capacity());
+            ImGui::End();
+            ImGui::Render();
+            ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), UI::renderer);
+
+            SDL_RenderPresent(UI::renderer);
+
+            if (!paused) {
+                Uint32 start = SDL_GetTicks();
+                active_pb.step(static_cast<MTMode>(mt_mode));
+                Uint32 elapsed = SDL_GetTicks() - start;
+                if (static_cast<int>(elapsed) < min_frame_time_ms) {
+                    SDL_Delay(min_frame_time_ms - elapsed);
+                }
+            }
+        };
+
+        if (use_arena) {
+            step_and_render(pb_arena);
+        } else {
+            step_and_render(pb);
         }
     }
 }

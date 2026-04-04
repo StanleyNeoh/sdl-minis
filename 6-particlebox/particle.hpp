@@ -11,12 +11,13 @@ struct Particle {
     float y = 0.0f;
     float vx = 0.0f;
     float vy = 0.0f;
+    float rad = 1.0f;
     u_int8_t r = 255, g = 255, b = 255;
 
-    bool is_overlap(const Particle& other, float rad) const {
+    bool is_overlap(const Particle& other) const {
         float dx = x - other.x;
         float dy = y - other.y;
-        float d = rad + rad;
+        float d = rad + other.rad;
         return dx * dx + dy * dy < d * d;
     }
 
@@ -25,7 +26,7 @@ struct Particle {
         y += vy;
     }
 
-    bool resolve_wall_collision(float w, float h, float rad) {
+    bool resolve_wall_collision(float w, float h) {
         bool resolved = false;
         if ((x + rad > w && vx > 0) || (x - rad < 0 && vx < 0)) {
             vx = -vx;

@@ -118,9 +118,12 @@ struct QuadTree {
     void query_nearby_pi(int pi, const QuadBox& range, vpii& out) const {
         if (!boundary.overlap(range)) return;
 
+        const auto& pi_p = (*particles)[pi];
         for (int pj: indices) {
-            const auto& p = (*particles)[pj];
-            if (pj > pi && range.contains(p.x, p.y)) {
+            if (pj == pi) continue;
+            const auto& pj_p = (*particles)[pj];
+            if (pi_p.rad < pj_p.rad || (pi_p.rad == pj_p.rad && pi > pj)) continue;
+            if (range.contains(pj_p.x, pj_p.y)) {
                 out.emplace_back(pi, pj);
             }
         }
@@ -132,7 +135,7 @@ struct QuadTree {
         }
     }
 
-    void query_nearby_pairs(float check_rad, vpii& out) const {
+    void query_nearby_pairs(vpii& out) const {
         int n = particles->size();
         #ifdef _OPENMP
             std::vector<vpii> nearby_thread_pairs(omp_get_max_threads());
@@ -143,6 +146,7 @@ struct QuadTree {
                 #pragma omp for schedule(static)
                 for (int pi = 0; pi < n; pi++) {
                     const auto& p = (*particles)[pi];
+                    float check_rad = 2.0f * p.rad;
                     query_nearby_pi(pi, QuadBox{p.x - check_rad, p.y - check_rad, 2 * check_rad, 2 * check_rad}, thread_pairs);
                 }
             }
@@ -152,6 +156,7 @@ struct QuadTree {
         #else
             for (int pi = 0; pi < n; pi++) {
                 const auto& p = (*particles)[pi];
+                float check_rad = 2.0f * p.rad;
                 query_nearby_pi(pi, QuadBox{p.x - check_rad, p.y - check_rad, 2 * check_rad, 2 * check_rad}, out);
             }
         #endif
@@ -173,6 +178,11 @@ struct QuadTree {
     void query_nearby_wall(float check_pad, vi& out) const {
         _query_nearby_wall(QuadBox{boundary.x + check_pad, boundary.y + check_pad, boundary.w - 2 * check_pad, boundary.h - 2 * check_pad}, out);
     }
+
+    int pool_node_used() const { return -1; }
+    int pool_node_capacity() const { return -1; }
+    int pool_indices_used() const { return -1; }
+    int pool_indices_capacity() const { return -1; }
 };
 
 struct QuadTreeArena {
@@ -328,14 +338,17 @@ struct QuadTreeArena {
         auto& node = node_pool[node_i];
         if (!node.boundary.overlap(range)) return;
 
+        const auto& pi_p = (*particles)[pi];
         int left = node.indices_len;
         int chunk_start = node.indices_start;
         while (left > 0) {
             int chunk_size = std::min(max_capacity, left);
             for (int i = 0; i < chunk_size; i++) {
                 int pj = indices_pool[chunk_start + i];
-                const auto& p = (*particles)[pj];
-                if (pj > pi && range.contains(p.x, p.y)) {
+                if (pj == pi) continue;
+                const auto& pj_p = (*particles)[pj];
+                if (pi_p.rad < pj_p.rad || (pi_p.rad == pj_p.rad && pi > pj)) continue;
+                if (range.contains(pj_p.x, pj_p.y)) {
                     out.emplace_back(pi, pj);
                 }
             }
@@ -393,7 +406,7 @@ struct QuadTreeArena {
         for (int pi = 0; pi < n; pi++) indices_insert(root_node_i, pi);
     }
 
-    void query_nearby_pairs(float check_rad, vpii& out) const {
+    void query_nearby_pairs(vpii& out) const {
         int n = particles->size();
         #ifdef _OPENMP
             std::vector<vpii> nearby_thread_pairs(omp_get_max_threads());
@@ -404,6 +417,7 @@ struct QuadTreeArena {
                 #pragma omp for schedule(static)
                 for (int pi = 0; pi < n; pi++) {
                     const auto& p = (*particles)[pi];
+                    float check_rad = 2.0f * p.rad;
                     query_nearby_pi(root_node_i, pi, QuadBox{p.x - check_rad, p.y - check_rad, 2 * check_rad, 2 * check_rad}, thread_pairs);
                 }
             }
@@ -413,6 +427,7 @@ struct QuadTreeArena {
         #else
             for (int pi = 0; pi < n; pi++) {
                 const auto& p = (*particles)[pi];
+                float check_rad = 2.0f * p.rad;
                 query_nearby_pi(root_node_i, pi, QuadBox{p.x - check_rad, p.y - check_rad, 2 * check_rad, 2 * check_rad}, out);
             }
         #endif
@@ -422,5 +437,10 @@ struct QuadTreeArena {
         auto& node = node_pool[root_node_i];
         query_nearby_wall(root_node_i, QuadBox{node.boundary.x + check_pad, node.boundary.y + check_pad, node.boundary.w - 2 * check_pad, node.boundary.h - 2 * check_pad}, out);
     }
+
+    int pool_node_used() const { return node_pool_i; }
+    int pool_node_capacity() const { return static_cast<int>(node_pool.size()); }
+    int pool_indices_used() const { return indices_pool_i; }
+    int pool_indices_capacity() const { return static_cast<int>(indices_pool.size()); }
 };
 #endif
