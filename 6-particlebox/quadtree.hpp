@@ -55,14 +55,18 @@ struct QuadTree {
         const Particles* particles = nullptr
     ): boundary(boundary), depth(depth), particles(particles) {}
     
-    void reset(const Particles& _particles) {
+    void reset(Particles& _particles) {
         particles = &_particles;
         int n = particles->size();
         if (!is_leaf()) {
             for (int i = 0; i < 4; i++) children[i].reset();
         }
         indices.clear();
-        for (int pi = 0; pi < n; pi++) insert(pi);
+        for (int pi = 0; pi < n; pi++) {
+            auto& p = _particles[pi];
+            p.resolve_wall_collision(boundary.w, boundary.h);
+            insert(pi);
+        }
     }
 
     bool is_leaf() const {
@@ -390,7 +394,7 @@ struct QuadTreeArena {
         root_node_i = alloc_node(boundary, depth);
     }
     
-    void reset(const Particles& _particles) {
+    void reset(Particles& _particles) {
         particles = &_particles;
         int n = particles->size();
         // root_node always at index 0
@@ -403,7 +407,11 @@ struct QuadTreeArena {
         node.indices_len = 0;
         node.children = {-1, -1, -1, -1};
         for (int j = 0; j < indices_chunk_size; j++) indices_pool[j] = -1;
-        for (int pi = 0; pi < n; pi++) indices_insert(root_node_i, pi);
+        for (int pi = 0; pi < n; pi++) {
+            auto& p = _particles[pi];
+            p.resolve_wall_collision(node.boundary.w, node.boundary.h);
+            indices_insert(root_node_i, pi);
+        }
     }
 
     void query_nearby_pairs(vpii& out) const {

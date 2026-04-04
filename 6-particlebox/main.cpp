@@ -21,6 +21,7 @@ int main() {
     int mt_mode = 1;
     float min_rad = 1.0f;
     float max_rad = 5.0f;
+    float gravity = 0.0f;
     int num_particles = 100;
     int min_frame_time_ms = 16;
     int padding = 20;
@@ -54,6 +55,10 @@ int main() {
             if (ImGui::Button(paused ? "Resume" : "Pause")) {
                 paused = !paused;
             }
+            ImGui::SameLine();
+            if (ImGui::Button("Reset")) {
+                active_pb.particles.clear();
+            }
             ImGui::Checkbox("Use Arena", &use_arena);
             const char* mt_modes[] = {"None", "Graph Coloring", "Mutex Locks", "Unsafe (No Lock)", "Naive (N^2)"};
             ImGui::Combo("MT Mode", &mt_mode, mt_modes, IM_ARRAYSIZE(mt_modes));
@@ -64,6 +69,7 @@ int main() {
             ImGui::SliderFloat("Min Radius", &min_rad, 0.1f, 20.0f);
             ImGui::SliderFloat("Max Radius", &max_rad, 0.1f, 20.0f);
             if (min_rad > max_rad) min_rad = max_rad;
+            ImGui::SliderFloat("Gravity", &gravity, -1.0f, 1.0f);
             ImGui::Separator();
             ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
             ImGui::Text("Node pool: %d / %d", active_pb.quadtree.pool_node_used(), active_pb.quadtree.pool_node_capacity());
@@ -76,7 +82,7 @@ int main() {
 
             if (!paused) {
                 Uint32 start = SDL_GetTicks();
-                active_pb.step(static_cast<MTMode>(mt_mode));
+                active_pb.step(static_cast<MTMode>(mt_mode), gravity);
                 Uint32 elapsed = SDL_GetTicks() - start;
                 if (static_cast<int>(elapsed) < min_frame_time_ms) {
                     SDL_Delay(min_frame_time_ms - elapsed);

@@ -59,10 +59,10 @@ struct ParticleBox {
     }
 
     template<MTMode mode>
-    void step() {
+    void step(float gravity) {
         int n = particles.size();
         for (int i = 0; i < n; i++) {
-            particles[i].step();
+            particles[i].step(gravity);
         }
 
         std::vector<int> nearby_walls;
@@ -219,16 +219,16 @@ struct ParticleBox {
         }
     }
 
-    void step(MTMode mode = MTMode::graph_coloring) {
+    void step(MTMode mode, float gravity = 0.0f) {
         switch (mode) {
-            case MTMode::naive: step<MTMode::naive>(); break;
-            case MTMode::none: step<MTMode::none>(); break;
+            case MTMode::naive: step<MTMode::naive>(gravity); break;
+            case MTMode::none: step<MTMode::none>(gravity); break;
         #ifdef _OPENMP
-            case MTMode::graph_coloring: step<MTMode::graph_coloring>(); break;
-            case MTMode::mutex_locks: step<MTMode::mutex_locks>(); break;
-            case MTMode::unsafe_no_lock: step<MTMode::unsafe_no_lock>(); break;
+            case MTMode::graph_coloring: step<MTMode::graph_coloring>(gravity); break;
+            case MTMode::mutex_locks: step<MTMode::mutex_locks>(gravity); break;
+            case MTMode::unsafe_no_lock: step<MTMode::unsafe_no_lock>(gravity); break;
         #endif
-            default: step<MTMode::none>(); break;
+            default: step<MTMode::none>(gravity); break;
         }
     }
 

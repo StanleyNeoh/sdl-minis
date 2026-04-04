@@ -1,6 +1,7 @@
 #ifndef PARTICLEBOX_PARTICLE
 #define PARTICLEBOX_PARTICLE
 
+#include <cmath>
 #include <iostream>
 
 #ifdef _OPENMP
@@ -21,19 +22,30 @@ struct Particle {
         return dx * dx + dy * dy < d * d;
     }
 
-    void step() {
+    void step(float gravity) {
+        vy += gravity;
         x += vx;
         y += vy;
     }
 
     bool resolve_wall_collision(float w, float h) {
         bool resolved = false;
-        if ((x + rad > w && vx > 0) || (x - rad < 0 && vx < 0)) {
-            vx = -vx;
+        if (x + rad > w) {
+            x = w - rad;
+            vx = -std::abs(vx);
+            resolved = true;
+        } else if (x - rad < 0) {
+            x = rad;
+            vx = std::abs(vx);
             resolved = true;
         }
-        if ((y + rad > h && vy > 0) || (y - rad < 0 && vy < 0)) {
-            vy = -vy;
+        if (y + rad > h) {
+            y = h - rad;
+            vy = -std::abs(vy);
+            resolved = true;
+        } else if (y - rad < 0) {
+            y = rad;
+            vy = std::abs(vy);
             resolved = true;
         }
         return resolved;
