@@ -22,7 +22,7 @@ struct ParticleBox {
     int w = 1000;
     int h = 1000;
     float rad = 1.0f;
-    QuadTree quadtree;
+    QuadTreeArena quadtree;
     std::vector<Particle> particles;
 
     ParticleBox(SDL_Renderer* renderer, SDL_Texture* particle_tex, int w, int h)

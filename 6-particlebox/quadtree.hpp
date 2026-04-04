@@ -175,4 +175,252 @@ struct QuadTree {
     }
 };
 
+struct QuadTreeArena {
+    static constexpr int max_capacity = 8;
+    static constexpr int max_depth = 8;
+    static constexpr int indices_chunk_size = max_capacity + 1;
+    static constexpr int default_node_pool_size = 8000;
+    static constexpr int default_indices_pool_size = default_node_pool_size * indices_chunk_size;
+
+    struct Node {
+        QuadBox boundary;
+        int depth = 0;
+
+        int indices_start;
+        int indices_i;
+        int indices_len;
+        std::array<int, 4> children = {-1, -1, -1, -1};
+    };
+
+    using vpii = std::vector<std::pair<int, int>>;
+    using vi = std::vector<int>;
+    using Particles = std::vector<Particle>;
+
+    const Particles* particles = nullptr;
+    int root_node_i = -1;
+    std::vector<Node> node_pool;
+    std::vector<int> indices_pool;
+    int indices_pool_i = 0;
+    int node_pool_i = 0;
+
+    int alloc_indices_chunk() {
+        if (indices_pool_i + indices_chunk_size > static_cast<int>(indices_pool.size())) {
+            indices_pool.resize(indices_pool.size() * 2);
+        }
+        int i = indices_pool_i;
+        indices_pool_i += indices_chunk_size;
+        for (int j = 0; j < indices_chunk_size; j++) indices_pool[i + j] = -1;
+        return i;
+    }
+
+    int alloc_indices_chunk(int node_i) {
+        auto& node = node_pool[node_i];
+        if (node.indices_start < 0) {
+            int i = alloc_indices_chunk();
+            node.indices_start = i;
+            node.indices_i = i;
+            node.indices_len = 0;
+            return i;
+        }
+        int chunk_start_i = node.indices_i - (node.indices_i % indices_chunk_size);
+        int chunk_last_i = chunk_start_i + indices_chunk_size - 1;
+        if (indices_pool[chunk_last_i] == -1) {
+            int i = alloc_indices_chunk();
+            indices_pool[chunk_last_i] = i;
+            return i;
+        }
+        return -1;
+    }
+
+    int alloc_node(const QuadBox& boundary, int depth=0) {
+        if (node_pool_i >= static_cast<int>(node_pool.size())) {
+            node_pool.resize(node_pool.size() * 2);
+        }
+        int node_i = node_pool_i++;
+        auto& node = node_pool[node_i];
+        node.boundary = boundary;
+        node.depth = depth;
+        node.indices_start = -1;
+        node.children = {-1, -1, -1, -1};
+        alloc_indices_chunk(node_i);
+        return node_i;
+    }
+
+    bool is_leaf(int node_i) const {
+        return node_pool[node_i].children[0] == -1;
+    }
+
+    void indices_push_back(int node_i, int pi) {
+        auto& node = node_pool[node_i];
+        if (node.indices_i % indices_chunk_size == indices_chunk_size - 1) {
+            alloc_indices_chunk(node_i);
+            node.indices_i = indices_pool[node.indices_i];
+        }
+        indices_pool[node.indices_i] = pi;
+        node.indices_i++;
+        node.indices_len++;
+    }
+
+    void indices_clear(int node_i) {
+        auto& node = node_pool[node_i];
+        node.indices_i = node.indices_start;
+        node.indices_len = 0;
+    }
+
+    bool indices_insert(int node_i, int pi) {
+        const auto& p = (*particles)[pi];
+        auto& node = node_pool[node_i];
+        if (!node.boundary.contains(p.x, p.y)) return false;
+        if (node.indices_len < max_capacity || node.depth >= max_depth) {
+            indices_push_back(node_i, pi);
+            return true;
+        }
+
+        if (is_leaf(node_i)) subdivide(node_i);
+
+        for (int ci = 0; ci < 4; ci++) {
+            int child_i = node.children[ci];
+            if (node_pool[child_i].boundary.contains(p.x, p.y)) {
+                indices_insert(child_i, pi);
+                return true;
+            }
+        }
+        indices_push_back(node_i, pi);
+        return true;
+    }
+
+    void subdivide(int node_i) {
+        auto& node = node_pool[node_i];
+        float x = node.boundary.x;
+        float y = node.boundary.y;
+        float halfw = node.boundary.w / 2;
+        float halfh = node.boundary.h / 2;
+        node.children[0] = alloc_node(QuadBox{x, y, halfw, halfh}, node.depth+1);
+        node.children[1] = alloc_node(QuadBox{x + halfw, y, halfw, halfh}, node.depth+1);
+        node.children[2] = alloc_node(QuadBox{x, y + halfh, halfw, halfh}, node.depth+1);
+        node.children[3] = alloc_node(QuadBox{x + halfw, y + halfh, halfw, halfh}, node.depth+1);
+
+        int left = node.indices_len;
+        int chunk_start = node.indices_start;
+        indices_clear(node_i);
+        while (left > 0) {
+            int chunk_size = std::min(max_capacity, left);
+            for (int i = 0; i < chunk_size; i++) {
+                int pi = indices_pool[chunk_start + i];
+                const auto& p = (*particles)[pi];
+                bool placed = false;
+                for (int ci = 0; ci < 4; ci++) {
+                    int child_i = node.children[ci];
+                    if (node_pool[child_i].boundary.contains(p.x, p.y)) {
+                        indices_insert(child_i, pi);
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) indices_push_back(node_i, pi);
+            }
+            left -= chunk_size;
+            chunk_start = indices_pool[chunk_start + indices_chunk_size - 1];
+        }
+    }
+
+    void query_nearby_pi(int node_i, int pi, const QuadBox& range, vpii& out) const {
+        auto& node = node_pool[node_i];
+        if (!node.boundary.overlap(range)) return;
+
+        int left = node.indices_len;
+        int chunk_start = node.indices_start;
+        while (left > 0) {
+            int chunk_size = std::min(max_capacity, left);
+            for (int i = 0; i < chunk_size; i++) {
+                int pj = indices_pool[chunk_start + i];
+                const auto& p = (*particles)[pj];
+                if (pj > pi && range.contains(p.x, p.y)) {
+                    out.emplace_back(pi, pj);
+                }
+            }
+            left -= chunk_size;
+            chunk_start = indices_pool[chunk_start + indices_chunk_size - 1];
+        }
+
+        if (is_leaf(node_i)) return;
+        for (int ci = 0; ci < 4; ci++) {
+            query_nearby_pi(node.children[ci], pi, range, out);
+        }
+    }
+
+    void query_nearby_wall(int node_i, const QuadBox& interior, vi& out) const {
+        auto& node = node_pool[node_i];
+        if (node.boundary.inside(interior)) return;
+        int left = node.indices_len;
+        int chunk_start = node.indices_start;
+        while (left > 0) {
+            int chunk_size = std::min(max_capacity, left);
+            for (int i = 0; i < chunk_size; i++) {
+                int pi = indices_pool[chunk_start + i];
+                const auto& p = (*particles)[pi];
+                if (interior.contains(p.x, p.y)) continue;
+                out.push_back(pi);
+            }
+            left -= chunk_size;
+            chunk_start = indices_pool[chunk_start + indices_chunk_size - 1];
+        }
+        if (is_leaf(node_i)) return;
+        for (int ci = 0; ci < 4; ci++) {
+            query_nearby_wall(node.children[ci], interior, out);
+        }
+    }
+
+    QuadTreeArena(const QuadBox& boundary, int depth = 0) {
+        node_pool.resize(default_node_pool_size);
+        indices_pool.resize(default_indices_pool_size);
+        root_node_i = alloc_node(boundary, depth);
+    }
+    
+    void reset(const Particles& _particles) {
+        particles = &_particles;
+        int n = particles->size();
+        // root_node always at index 0
+        root_node_i = 0;
+        node_pool_i = 1;
+        indices_pool_i = indices_chunk_size;
+        auto& node = node_pool[root_node_i];
+        node.indices_start = 0;
+        node.indices_i = 0;
+        node.indices_len = 0;
+        node.children = {-1, -1, -1, -1};
+        for (int j = 0; j < indices_chunk_size; j++) indices_pool[j] = -1;
+        for (int pi = 0; pi < n; pi++) indices_insert(root_node_i, pi);
+    }
+
+    void query_nearby_pairs(float check_rad, vpii& out) const {
+        int n = particles->size();
+        #ifdef _OPENMP
+            std::vector<vpii> nearby_thread_pairs(omp_get_max_threads());
+            #pragma omp parallel
+            {
+                int tid = omp_get_thread_num();
+                auto& thread_pairs = nearby_thread_pairs[tid];
+                #pragma omp for schedule(static)
+                for (int pi = 0; pi < n; pi++) {
+                    const auto& p = (*particles)[pi];
+                    query_nearby_pi(root_node_i, pi, QuadBox{p.x - check_rad, p.y - check_rad, 2 * check_rad, 2 * check_rad}, thread_pairs);
+                }
+            }
+            for (auto& thread_pairs: nearby_thread_pairs) {
+                out.insert(out.end(), thread_pairs.begin(), thread_pairs.end());
+            }
+        #else
+            for (int pi = 0; pi < n; pi++) {
+                const auto& p = (*particles)[pi];
+                query_nearby_pi(root_node_i, pi, QuadBox{p.x - check_rad, p.y - check_rad, 2 * check_rad, 2 * check_rad}, out);
+            }
+        #endif
+    }
+
+    void query_nearby_wall(float check_pad, vi& out) const {
+        auto& node = node_pool[root_node_i];
+        query_nearby_wall(root_node_i, QuadBox{node.boundary.x + check_pad, node.boundary.y + check_pad, node.boundary.w - 2 * check_pad, node.boundary.h - 2 * check_pad}, out);
+    }
+};
 #endif
