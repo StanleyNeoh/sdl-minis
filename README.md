@@ -23,9 +23,10 @@ This repository contains simple projects demonstrating the use of SDL2.
 - `5-snake`: Snake game using ImGui for menu screens
   - To run, execute `./5-snake` from the build folder.
 - `6-particlebox`: Particle physics simulation with ImGui settings panel
-  - Configurable particle count, physics steps, and radius
+  - Configurable particle count, radius range, mass range, gravity, and collision restitution (0–2, sub-elastic to super-elastic)
+  - Per-particle mass with mass-weighted elastic collisions; hue-based coloring (blue=light, red=heavy)
   - Arena-allocated quadtree for O(n log n) spatial collision queries instead of brute-force O(n²)
-  - OpenMP parallelism for particle stepping, quadtree querying (thread-local buffers), and wall collision detection
+  - Multiple multithreading modes selectable at runtime: graph coloring (lock-free), mutex locks, unsafe (no lock), and naive N²
   - Lock-free parallel collision resolution via greedy graph coloring — pairs are partitioned into conflict-free batches so no two pairs in a batch share a particle
   - Cache-friendly compact particle layout and chunked quadtree storage to reduce allocation overhead
   - To run, execute `./6-particlebox` from the build folder.
