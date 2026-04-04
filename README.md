@@ -2,10 +2,9 @@
 
 This repository contains simple projects demonstrating the use of SDL2.
 
-## Setup on with CMake
+## Setup with CMake
 - `cd` into the root folder of the repository.
-- Run `git submodule update --init --recursive` to clone the SDL2 repository into the `vendored/SDL2` folder.
-- Run `cmake -B build -S .` to generate the build files.
+- Run `cmake -B build -S .` to generate the build files. Dependencies are fetched automatically via CMake FetchContent.
 - `cd build` into the build folder.
 - Run `make` to build the projects.
 
@@ -23,4 +22,10 @@ This repository contains simple projects demonstrating the use of SDL2.
   - To run, execute `./4-dragbox` from the build folder.
 - `5-snake`: Snake game using ImGui for menu screens
   - To run, execute `./5-snake` from the build folder.
-- More to come...
+- `6-particlebox`: Particle physics simulation with ImGui settings panel
+  - Configurable particle count, physics steps, and radius
+  - Arena-allocated quadtree for O(n log n) spatial collision queries instead of brute-force O(n²)
+  - OpenMP parallelism for particle stepping, quadtree querying (thread-local buffers), and wall collision detection
+  - Lock-free parallel collision resolution via greedy graph coloring — pairs are partitioned into conflict-free batches so no two pairs in a batch share a particle
+  - Cache-friendly compact particle layout and chunked quadtree storage to reduce allocation overhead
+  - To run, execute `./6-particlebox` from the build folder.

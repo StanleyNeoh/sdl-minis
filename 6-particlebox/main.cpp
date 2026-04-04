@@ -1,6 +1,6 @@
 #include "ui.hpp"
 #include "textures.hpp"
-#include "particle.hpp"
+#include "particle_box.hpp"
 
 void NewFrame() {
     ImGui_ImplSDLRenderer2_NewFrame();
