@@ -28,6 +28,8 @@ struct ParticleBox {
     int h = 1000;
     float min_rad = 1.0f;
     float max_rad = 5.0f;
+    float min_mass = 1.0f;
+    float max_mass = 1.0f;
     QT quadtree;
     std::vector<Particle> particles;
 
@@ -45,11 +47,11 @@ struct ParticleBox {
                 float y = get_rand_float(spawn_rad, h - spawn_rad);
                 float vx = get_rand_float(-2.0f, 2.0f);
                 float vy = get_rand_float(-2.0f, 2.0f);
-                u_int8_t r = get_rand_int(20, 255);
-                u_int8_t g = get_rand_int(20, 255);
-                u_int8_t b = get_rand_int(20, 255);
                 float prad = get_rand_float(min_rad, max_rad);
-                particles.emplace_back(Particle{x: x, y: y, vx: vx, vy: vy, rad: prad, r: r, g: g, b: b});
+                float pmass = get_rand_float(min_mass, max_mass);
+                // Hue from 240 (blue, light) → 0 (red, heavy), exponential decay on absolute mass
+                RGB rgb = hue_to_rgb(std::exp(-pmass / 20.0f) * 240.0f);
+                particles.emplace_back(Particle{x: x, y: y, vx: vx, vy: vy, rad: prad, mass: pmass, r: rgb.r, g: rgb.g, b: rgb.b});
             }
         } else if (req < 0) {
             for (int i = 0; i < -req; i++) {
@@ -59,7 +61,7 @@ struct ParticleBox {
     }
 
     template<MTMode mode>
-    void step(float gravity) {
+    void step(float gravity, float restitution) {
         int n = particles.size();
         for (int i = 0; i < n; i++) {
             particles[i].step(gravity);
@@ -77,7 +79,7 @@ struct ParticleBox {
             for (int n_collision = 0; n_collision < 100; n_collision++) {
                 bool has_collision = false;
                 for (int i: nearby_walls) {
-                    if (particles[i].resolve_wall_collision(w, h)) {
+                    if (particles[i].resolve_wall_collision(w, h, restitution)) {
                         has_collision |= true;
                     }
                 }
@@ -85,7 +87,7 @@ struct ParticleBox {
                     auto& p1 = particles[pair.first];
                     auto& p2 = particles[pair.second];
                     if (p1.is_overlap(p2)) {
-                        if (resolve_collision(p1, p2)) {
+                        if (resolve_collision(p1, p2, restitution)) {
                             has_collision |= true;
                         }
                     }
@@ -119,7 +121,7 @@ struct ParticleBox {
                 #pragma omp parallel for schedule(static) reduction(| : has_collision)
                 for (int i = 0; i < n_walls; i++) {
                     int ind = nearby_walls[i];
-                    if (particles[ind].resolve_wall_collision(w, h)) {
+                    if (particles[ind].resolve_wall_collision(w, h, restitution)) {
                         has_collision |= true;
                     }
                 }
@@ -132,7 +134,7 @@ struct ParticleBox {
                         auto& p1 = particles[pair.first];
                         auto& p2 = particles[pair.second];
                         if (p1.is_overlap(p2)) {
-                            if (resolve_collision(p1, p2)) {
+                            if (resolve_collision(p1, p2, restitution)) {
                                 has_collision |= true;
                             }
                         }
@@ -150,7 +152,7 @@ struct ParticleBox {
                 #pragma omp parallel for schedule(static) reduction(| : has_collision)
                 for (int i = 0; i < n_walls; i++) {
                     int ind = nearby_walls[i];
-                    if (particles[ind].resolve_wall_collision(w, h)) {
+                    if (particles[ind].resolve_wall_collision(w, h, restitution)) {
                         has_collision |= true;
                     }
                 }
@@ -162,7 +164,7 @@ struct ParticleBox {
                     auto& p1 = particles[pair.first];
                     auto& p2 = particles[pair.second];
                     if (p1.is_overlap(p2)) {
-                        if (resolve_collision(p1, p2, locks[pair.first], locks[pair.second])) {
+                        if (resolve_collision(p1, p2, locks[pair.first], locks[pair.second], restitution)) {
                             has_collision |= true;
                         }
                     }
@@ -178,7 +180,7 @@ struct ParticleBox {
                 #pragma omp parallel for schedule(static) reduction(| : has_collision)
                 for (int i = 0; i < n_walls; i++) {
                     int ind = nearby_walls[i];
-                    if (particles[ind].resolve_wall_collision(w, h)) {
+                    if (particles[ind].resolve_wall_collision(w, h, restitution)) {
                         has_collision |= true;
                     }
                 }
@@ -190,7 +192,7 @@ struct ParticleBox {
                     auto& p1 = particles[pair.first];
                     auto& p2 = particles[pair.second];
                     if (p1.is_overlap(p2)) {
-                        if (resolve_collision(p1, p2)) {
+                        if (resolve_collision(p1, p2, restitution)) {
                             has_collision |= true;
                         }
                     }
@@ -201,14 +203,14 @@ struct ParticleBox {
             for (int n_collision = 0; n_collision < 100; n_collision++) {
                 bool has_collision = false;
                 for (int i = 0; i < n; i++) {
-                    if (particles[i].resolve_wall_collision(w, h)) {
+                    if (particles[i].resolve_wall_collision(w, h, restitution)) {
                         has_collision |= true;
                     }
                 }
                 for (int i = 0; i < n; i++) {
                     for (int j = i + 1; j < n; j++) {
                         if (particles[i].is_overlap(particles[j])) {
-                            if (resolve_collision(particles[i], particles[j])) {
+                            if (resolve_collision(particles[i], particles[j], restitution)) {
                                 has_collision |= true;
                             }
                         }
@@ -219,16 +221,16 @@ struct ParticleBox {
         }
     }
 
-    void step(MTMode mode, float gravity = 0.0f) {
+    void step(MTMode mode, float gravity = 0.0f, float restitution = 1.0f) {
         switch (mode) {
-            case MTMode::naive: step<MTMode::naive>(gravity); break;
-            case MTMode::none: step<MTMode::none>(gravity); break;
+            case MTMode::naive: step<MTMode::naive>(gravity, restitution); break;
+            case MTMode::none: step<MTMode::none>(gravity, restitution); break;
         #ifdef _OPENMP
-            case MTMode::graph_coloring: step<MTMode::graph_coloring>(gravity); break;
-            case MTMode::mutex_locks: step<MTMode::mutex_locks>(gravity); break;
-            case MTMode::unsafe_no_lock: step<MTMode::unsafe_no_lock>(gravity); break;
+            case MTMode::graph_coloring: step<MTMode::graph_coloring>(gravity, restitution); break;
+            case MTMode::mutex_locks: step<MTMode::mutex_locks>(gravity, restitution); break;
+            case MTMode::unsafe_no_lock: step<MTMode::unsafe_no_lock>(gravity, restitution); break;
         #endif
-            default: step<MTMode::none>(gravity); break;
+            default: step<MTMode::none>(gravity, restitution); break;
         }
     }
 

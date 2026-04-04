@@ -13,6 +13,7 @@ struct Particle {
     float vx = 0.0f;
     float vy = 0.0f;
     float rad = 1.0f;
+    float mass = 1.0f;
     u_int8_t r = 255, g = 255, b = 255;
 
     bool is_overlap(const Particle& other) const {
@@ -28,30 +29,30 @@ struct Particle {
         y += vy;
     }
 
-    bool resolve_wall_collision(float w, float h) {
+    bool resolve_wall_collision(float w, float h, float restitution = 1.0f) {
         bool resolved = false;
         if (x + rad > w) {
             x = w - rad;
-            vx = -std::abs(vx);
+            vx = -std::abs(vx) * restitution;
             resolved = true;
         } else if (x - rad < 0) {
             x = rad;
-            vx = std::abs(vx);
+            vx = std::abs(vx) * restitution;
             resolved = true;
         }
         if (y + rad > h) {
             y = h - rad;
-            vy = -std::abs(vy);
+            vy = -std::abs(vy) * restitution;
             resolved = true;
         } else if (y - rad < 0) {
             y = rad;
-            vy = std::abs(vy);
+            vy = std::abs(vy) * restitution;
             resolved = true;
         }
         return resolved;
     }
 
-    friend bool resolve_collision(Particle& p1, Particle& p2) {
+    friend bool resolve_collision(Particle& p1, Particle& p2, float restitution = 1.0f) {
         float dx = p2.x - p1.x;
         float dy = p2.y - p1.y;
         float dvx = p2.vx - p1.vx;
@@ -66,15 +67,18 @@ struct Particle {
             return false;
         }
 
-        float scale = dot / distance_sq;
-        p1.vx += scale * dx;
-        p1.vy += scale * dy;
-        p2.vx -= scale * dx;
-        p2.vy -= scale * dy;
+        float total_mass = p1.mass + p2.mass;
+        float scale = (1.0f + restitution) * dot / distance_sq;
+        float s1 = p2.mass / total_mass * scale;
+        float s2 = p1.mass / total_mass * scale;
+        p1.vx += s1 * dx;
+        p1.vy += s1 * dy;
+        p2.vx -= s2 * dx;
+        p2.vy -= s2 * dy;
         return true;
     }
 
-    friend bool resolve_collision(Particle& p1, Particle& p2, omp_lock_t& m1, omp_lock_t& m2) {
+    friend bool resolve_collision(Particle& p1, Particle& p2, omp_lock_t& m1, omp_lock_t& m2, float restitution = 1.0f) {
         float dx = p2.x - p1.x;
         float dy = p2.y - p1.y;
         float distance_sq = dx * dx + dy * dy;
@@ -91,11 +95,14 @@ struct Particle {
             return false;
         }
 
-        float scale = dot / distance_sq;
-        p1.vx += scale * dx;
-        p1.vy += scale * dy;
-        p2.vx -= scale * dx;
-        p2.vy -= scale * dy;
+        float total_mass = p1.mass + p2.mass;
+        float scale = (1.0f + restitution) * dot / distance_sq;
+        float s1 = p2.mass / total_mass * scale;
+        float s2 = p1.mass / total_mass * scale;
+        p1.vx += s1 * dx;
+        p1.vy += s1 * dy;
+        p2.vx -= s2 * dx;
+        p2.vy -= s2 * dy;
         omp_unset_lock(&m2);
         omp_unset_lock(&m1);
         return true;
