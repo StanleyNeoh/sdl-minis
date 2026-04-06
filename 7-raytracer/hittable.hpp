@@ -2,6 +2,7 @@
 #define RAYTRACER_HITTABLE
 
 #include "vec3.hpp"
+#include <iostream>
 
 struct Ray;
 
@@ -41,6 +42,16 @@ struct Cube: Hittable {
             _pos < pos + dim
         );
     }
+
+    virtual bool hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record) const override;
+    virtual void color(Ray& ray) const override;
+};
+
+struct Plane: Hittable {
+    Vec3 normal;
+    Vec3 pos;
+
+    Plane(const Vec3& normal, const Vec3& pos): normal(normal), pos(pos) {}
 
     virtual bool hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record) const override;
     virtual void color(Ray& ray) const override;

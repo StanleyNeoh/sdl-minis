@@ -36,27 +36,31 @@ struct Camera {
 
     void handle_event(const SDL_Event& event) {
         if (event.type == SDL_MOUSEMOTION) {
-            yaw -= event.motion.xrel * mouse_sens;
-            pitch += event.motion.yrel * mouse_sens;
+            if (event.motion.state & SDL_BUTTON_LMASK) {
+                yaw += event.motion.xrel * mouse_sens;
+                pitch -= event.motion.yrel * mouse_sens;
 
-            // clamp pitch
-            if (pitch > 1.5f) pitch = 1.5f;
-            if (pitch < -1.5f) pitch = -1.5f;
+                // clamp pitch
+                if (pitch > 1.5f) pitch = 1.5f;
+                if (pitch < -1.5f) pitch = -1.5f;
+            }
         }
     }
 
     void update(float dt) {
         vp_u = {
             std::cos(yaw),
-            std::sin(pitch) * std::sin(yaw),
-            -std::cos(pitch) * std::sin(yaw)
+            0,
+            -std::sin(yaw),
         };
         vp_v = {
-            0,
+            std::sin(yaw) * std::sin(pitch),
             std::cos(pitch),
-            std::sin(pitch)
+            std::cos(yaw) * std::sin(pitch)
         };
         Vec3 forward = forward_dir();
+        forward.y = 0;
+        forward.normalize();
 
         const Uint8* state = SDL_GetKeyboardState(NULL);
         float speed = 10.0f * dt;
@@ -64,6 +68,8 @@ struct Camera {
         if (state[SDL_SCANCODE_S]) center -= forward * speed;
         if (state[SDL_SCANCODE_D]) center += vp_u * speed;
         if (state[SDL_SCANCODE_A]) center -= vp_u * speed;
+        if (state[SDL_SCANCODE_SPACE]) center.y -= speed;
+        if (state[SDL_SCANCODE_LCTRL]) center.y += speed;
     }
 
     void scan(Uint32* pixels, int pitch, const std::vector<Hittable*>& hittables) {
@@ -75,12 +81,13 @@ struct Camera {
         #ifdef _OPENMP
             #pragma omp parallel for schedule(static)
             for (int i = 0; i < h * w; i++) {
-                int r = i % w;
-                int c = i / w;
-                Vec3 dir = dz + (static_cast<float>(i) - halfh) * scaled_v + (static_cast<float>(j) - halfw) * scaled_u;
+                int r = i / w;
+                int c = i % w;
+                Uint32* row = offset(pixels, r * pitch);
+                Vec3 dir = dz + (static_cast<float>(r) - halfh) * scaled_v + (static_cast<float>(c) - halfw) * scaled_u;
                 Ray ray{center, dir.unit()};
                 ray.cast(hittables);
-                row[j] = ray.argb_color();
+                row[c] = ray.argb_color();
             }
         #else
             for (int i = 0; i < h; i++) {

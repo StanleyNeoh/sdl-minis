@@ -38,32 +38,32 @@ void Sphere::color(Ray& ray) const {
 bool Cube::hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record) const {
     Vec3 opp = pos + dim;
     int count = 0;
-    Ray::CutPlaneRes pres;
-    Ray::CutPlaneRes res;
-    auto check = [&](Ray::CutPlaneRes& _res) {
+    Ray::CutPlaneSpanRes hits[2];
+    Ray::CutPlaneSpanRes res;
+    auto check = [&](const Ray::CutPlaneSpanRes& _res) {
         if (_res.ca <= 1 && _res.ca >= 0 && _res.cb <= 1 && _res.cb >= 0) {
+            if (count < 2) hits[count] = _res;
             count++;
-            std::swap(_res, pres);
         }
     };
-    if (ray.cutPlane(pos, {dim.x, 0, 0}, {0, dim.y, 0}, res)) check(res);
-    if (ray.cutPlane(pos, {0, 0, dim.z}, {dim.x, 0, 0}, res)) check(res);
-    if (ray.cutPlane(pos, {0, dim.y, 0}, {0, 0, dim.z}, res)) check(res);
-    if (ray.cutPlane(opp, {-dim.x, 0, 0}, {0, -dim.y, 0}, res)) check(res);
-    if (ray.cutPlane(opp, {0, 0, -dim.z}, {-dim.x, 0, 0}, res)) check(res);
-    if (ray.cutPlane(opp, {0, -dim.y, 0}, {0, 0, -dim.z}, res)) check(res);
+    if (ray.cutPlaneSpan(pos, {dim.x, 0, 0}, {0, dim.y, 0}, res)) check(res);
+    if (ray.cutPlaneSpan(pos, {0, 0, dim.z}, {dim.x, 0, 0}, res)) check(res);
+    if (ray.cutPlaneSpan(pos, {0, dim.y, 0}, {0, 0, dim.z}, res)) check(res);
+    if (ray.cutPlaneSpan(opp, {-dim.x, 0, 0}, {0, -dim.y, 0}, res)) check(res);
+    if (ray.cutPlaneSpan(opp, {0, 0, -dim.z}, {-dim.x, 0, 0}, res)) check(res);
+    if (ray.cutPlaneSpan(opp, {0, -dim.y, 0}, {0, 0, -dim.z}, res)) check(res);
     if (count != 2) return false;
-    if (pres.t > res.t) std::swap(pres, res);
-    if (pres.t >= ray_tmin && pres.t <= ray_tmax) {
-        record.t = pres.t;
-        record.p = pres.pos;
-        record.set_face_normal(ray, pres.normal);
+    if (hits[0].t > hits[1].t) std::swap(hits[0], hits[1]);
+    if (hits[0].t >= ray_tmin && hits[0].t <= ray_tmax) {
+        record.t = hits[0].t;
+        record.p = hits[0].pos;
+        record.set_face_normal(ray, hits[0].normal);
         return true;
     }
-    if (res.t >= ray_tmin && res.t <= ray_tmax) {
-        record.t = res.t;
-        record.p = res.pos;
-        record.set_face_normal(ray, pres.normal);
+    if (hits[1].t >= ray_tmin && hits[1].t <= ray_tmax) {
+        record.t = hits[1].t;
+        record.p = hits[1].pos;
+        record.set_face_normal(ray, hits[1].normal);
         return true;
     }
     return false;
@@ -71,4 +71,19 @@ bool Cube::hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record
 
 void Cube::color(Ray& ray) const {
     ray.color = Vec3{0, 1, 0};
+}
+
+bool Plane::hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record) const {
+    int count = 0;
+    Ray::CutPlaneNormalRes res;
+    if (!ray.cutPlaneNormal(pos, normal, res)) return false;
+    if (res.t < ray_tmin || res.t > ray_tmax) return false;
+    record.t = res.t;
+    record.p = res.pos;
+    record.set_face_normal(ray, normal);
+    return true;
+}
+
+void Plane::color(Ray& ray) const {
+    ray.color = Vec3{0, 0, 1};
 }

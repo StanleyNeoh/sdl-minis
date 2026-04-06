@@ -39,18 +39,16 @@ struct UI {
 
 int main() {
     UI ui;
-    SDL_SetRelativeMouseMode(SDL_TRUE);
-    SDL_SetWindowGrab(window, SDL_TRUE);
-    SDL_ShowCursor(SDL_DISABLE);
-    SDL_WarpMouseInWindow(window, win_w / 2, win_h / 2);
 
     SDL_Texture* screen_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, win_w, win_h);
     Camera camera(win_w, win_h);
     Sphere sphere(Vec3{0, 0, 10}, 1.0f);
     Cube cube(Vec3{5, 0, 10}, Vec3{1, 1 ,1});
+    Plane floor(Vec3{0, -1, 0}, Vec3{0, 1, 0});
     std::vector<Hittable*> hittables;
     hittables.push_back(&sphere);
     hittables.push_back(&cube);
+    hittables.push_back(&floor);
 
     bool done = false;
     Uint32 last_time = SDL_GetTicks();
@@ -64,19 +62,6 @@ int main() {
             switch (event.type) {
             case SDL_QUIT:
                 done = true;
-                break;
-            case SDL_KEYDOWN:
-                if (event.key.keysym.sym == SDLK_ESCAPE) {
-                    SDL_SetRelativeMouseMode(SDL_FALSE);
-                    SDL_SetWindowGrab(window, SDL_FALSE);
-                    SDL_ShowCursor(SDL_ENABLE);
-                }
-                break;
-            case SDL_MOUSEBUTTONDOWN:
-                SDL_SetRelativeMouseMode(SDL_TRUE);
-                SDL_SetWindowGrab(window, SDL_TRUE);
-                SDL_ShowCursor(SDL_DISABLE);
-                SDL_WarpMouseInWindow(window, win_w / 2, win_h / 2);
                 break;
             default:
                 camera.handle_event(event);
