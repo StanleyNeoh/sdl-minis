@@ -95,6 +95,17 @@ struct Vec3 {
         return *this;
     }
 
+    bool operator<(const Vec3& other) const {
+        return (
+            x < other.x &&
+            y < other.y &&
+            z < other.z        
+        );
+    }
+
+    bool operator>(const Vec3& other) const {
+        return other < (*this);
+    }
 
     friend Vec3 operator+(const Vec3& a, const Vec3& b) {
         return {a.x + b.x, a.y + b.y, a.z + b.z};

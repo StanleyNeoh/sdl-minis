@@ -2,7 +2,7 @@
 #include "hittable.hpp"
 #include "ray.hpp"
 
-void HitRecord::set_face_normal(const Ray& ray, const Vec3& outward_normal) {
+void Hittable::HitRecord::set_face_normal(const Ray& ray, const Vec3& outward_normal) {
     front_face = ray.dir.dot(outward_normal) < 0;
     normal = front_face ? outward_normal : -outward_normal;
 }
@@ -33,4 +33,42 @@ bool Sphere::hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& reco
 
 void Sphere::color(Ray& ray) const {
     ray.color = Vec3{1, 0, 0};
+}
+
+bool Cube::hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record) const {
+    Vec3 opp = pos + dim;
+    int count = 0;
+    Ray::CutPlaneRes pres;
+    Ray::CutPlaneRes res;
+    auto check = [&](Ray::CutPlaneRes& _res) {
+        if (_res.ca <= 1 && _res.ca >= 0 && _res.cb <= 1 && _res.cb >= 0) {
+            count++;
+            std::swap(_res, pres);
+        }
+    };
+    if (ray.cutPlane(pos, {dim.x, 0, 0}, {0, dim.y, 0}, res)) check(res);
+    if (ray.cutPlane(pos, {0, 0, dim.z}, {dim.x, 0, 0}, res)) check(res);
+    if (ray.cutPlane(pos, {0, dim.y, 0}, {0, 0, dim.z}, res)) check(res);
+    if (ray.cutPlane(opp, {-dim.x, 0, 0}, {0, -dim.y, 0}, res)) check(res);
+    if (ray.cutPlane(opp, {0, 0, -dim.z}, {-dim.x, 0, 0}, res)) check(res);
+    if (ray.cutPlane(opp, {0, -dim.y, 0}, {0, 0, -dim.z}, res)) check(res);
+    if (count != 2) return false;
+    if (pres.t > res.t) std::swap(pres, res);
+    if (pres.t >= ray_tmin && pres.t <= ray_tmax) {
+        record.t = pres.t;
+        record.p = pres.pos;
+        record.set_face_normal(ray, pres.normal);
+        return true;
+    }
+    if (res.t >= ray_tmin && res.t <= ray_tmax) {
+        record.t = res.t;
+        record.p = res.pos;
+        record.set_face_normal(ray, pres.normal);
+        return true;
+    }
+    return false;
+}
+
+void Cube::color(Ray& ray) const {
+    ray.color = Vec3{0, 1, 0};
 }

@@ -7,7 +7,7 @@ Vec3 Ray::at(float t) const {
 
 void Ray::cast(const std::vector<Hittable*>& hittables) {
     for (auto ptr: hittables) {
-        HitRecord record;
+        Hittable::HitRecord record;
         if (!ptr->hit(*this, 0.1, 20.0, record)) continue;
         ptr->color(*this);
         return;

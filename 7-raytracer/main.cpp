@@ -47,8 +47,10 @@ int main() {
     SDL_Texture* screen_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, win_w, win_h);
     Camera camera(win_w, win_h);
     Sphere sphere(Vec3{0, 0, 10}, 1.0f);
+    Cube cube(Vec3{5, 0, 10}, Vec3{1, 1 ,1});
     std::vector<Hittable*> hittables;
     hittables.push_back(&sphere);
+    hittables.push_back(&cube);
 
     bool done = false;
     Uint32 last_time = SDL_GetTicks();

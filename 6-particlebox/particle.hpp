@@ -78,6 +78,7 @@ struct Particle {
         return true;
     }
 
+    #ifdef _OPENMP
     friend bool resolve_collision(Particle& p1, Particle& p2, omp_lock_t& m1, omp_lock_t& m2, float restitution = 1.0f) {
         float dx = p2.x - p1.x;
         float dy = p2.y - p1.y;
@@ -107,6 +108,7 @@ struct Particle {
         omp_unset_lock(&m1);
         return true;
     }
+    #endif
 
     friend std::ostream& operator<<(std::ostream& o, const Particle& p) {
         o << "[p: (" << p.x << "," << p.y << "), v: (" << p.vx << "," << p.vy << "), r: "

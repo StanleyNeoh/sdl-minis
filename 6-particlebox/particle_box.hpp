@@ -143,6 +143,7 @@ struct ParticleBox {
                 if (!has_collision) break;
             }
         } else if constexpr (mode == MTMode::mutex_locks) {
+            #ifdef _OPENMP
             std::vector<omp_lock_t> locks(n);
             for (int i = 0; i < n; i++) omp_init_lock(&locks[i]);
 
@@ -173,6 +174,7 @@ struct ParticleBox {
             }
 
             for (int i = 0; i < n; i++) omp_destroy_lock(&locks[i]);
+            #endif
         } else if constexpr (mode == MTMode::unsafe_no_lock) {
             for (int n_collision = 0; n_collision < 100; n_collision++) {
                 bool has_collision = false;
