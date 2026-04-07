@@ -42,17 +42,25 @@ int main() {
 
     SDL_Texture* screen_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, win_w, win_h);
     Camera<win_w, win_h> camera;
-    UniformGlow floorMat(Vec3{0, 0.75, 0.01});
-    SurfaceNormalGlow objMat;
     GradientGlow skyMat(Vec3{0, -1, 0}, Vec3{1, 1, 1}, Vec3{0.5, 0.7, 1.0});
+    Lambertian floorMat(Vec3{0, 0.5, 0.01});
     Lambertian lambertMat(Vec3{0.5, 0.5, 0.5});
-    Metal metalMat(Vec3{0.8, 0.8, 0.9}, 0.3);
+    Metal metalMat(Vec3{0.8, 0.8, 0.9}, 0.01);
+    Dielectric dielectricMat({1, 1, 1}, 1.3);
+    Dielectric dielectricMat2({1, 1, 0.8}, 1.3);
+    Dielectric invDielectricMat({1, 1, 1}, 1 / 1.3);
 
     Sphere sphere(Vec3{0, 0, 10}, 1.0f, &metalMat);
-    Cube cube(Vec3{5, 0, 10}, Vec3{1, 1 ,1}, &lambertMat);
+    Sphere sphere2(Vec3{-2.0f, 0, 10}, 1.0f, &dielectricMat);
+    Sphere sphere2_1(Vec3{-2.0f, 0, 10}, 0.9f, &invDielectricMat);
+    Sphere sphere3(Vec3{-4.0f, 0, 10}, 1.0f, &lambertMat);
+    Cube cube(Vec3{2, 0, 10}, Vec3{1, 1 ,1}, &dielectricMat2);
     Plane floor(Vec3{0, -1, 0}, Vec3{0, 1, 0}, &lambertMat);
     Hittables hittables(&skyMat);
     hittables.add(&sphere);
+    hittables.add(&sphere2);
+    hittables.add(&sphere2_1);
+    hittables.add(&sphere3);
     hittables.add(&cube);
     hittables.add(&floor);
 

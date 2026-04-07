@@ -32,7 +32,7 @@ struct Vec3 {
         };
     }
 
-    Vec3 yaw(float rad) { // about z
+    Vec3 yaw(float rad) const { // about z
         float c = std::cos(rad);
         float s = std::sin(rad);
         return {
@@ -42,7 +42,7 @@ struct Vec3 {
         };
     }
 
-    Vec3 pitch(float rad) { // about y
+    Vec3 pitch(float rad) const { // about y
         float c = std::cos(rad);
         float s = std::sin(rad);
         return {
@@ -52,7 +52,7 @@ struct Vec3 {
         };
     }
 
-    Vec3 roll(float rad) { // about x
+    Vec3 roll(float rad) const { // about x
         float c = std::cos(rad);
         float s = std::sin(rad);
         return {
@@ -62,7 +62,7 @@ struct Vec3 {
         };
     }
 
-    Vec3 rot(float rad, const Vec3& k) {
+    Vec3 rot(float rad, const Vec3& k) const {
         float c = std::cos(rad);
         float s = std::sin(rad);
         const auto& v = *this;
@@ -88,7 +88,7 @@ struct Vec3 {
         z /= f;
     }
 
-    Uint32 as_argb() {
+    Uint32 as_argb() const {
         static const Interval interval(0.000, 0.9999);
         int a = 255;
         int r = 256 * interval.clamp(lin_to_gamma(x));
@@ -97,8 +97,20 @@ struct Vec3 {
         return (a << 24) | (r << 16) | (g << 8) | b;
     }
 
-    bool near_zero(float eps=1e-6) {
+    bool near_zero(float eps=1e-6) const {
         return abs(x) < eps && abs(y) < eps && abs(z) < eps;
+    }
+
+    Vec3 reflect(const Vec3& n) const {
+        return *this - 2 * dot(n) * n;
+    }
+
+    Vec3 refract(const Vec3& normal, float rel_ri) const { 
+        // rel_ri = n_2 / n_1
+        float cos_theta = std::min(-normal.dot(*this), 1.0f);
+        Vec3 r_out_perp = (*this + cos_theta * normal) / rel_ri;
+        Vec3 r_out_par = -std::sqrt(std::abs(1.0 - r_out_perp.len2())) * normal;
+        return r_out_par + r_out_perp;
     }
 
     Vec3 operator-() const {
