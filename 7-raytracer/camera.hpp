@@ -119,7 +119,7 @@ struct Camera {
 
             Vec3 dir = (pixel00_loc + rf * pix_v + cf * pix_u).unit();
             Ray ray{center, dir};
-            colors[i] += hittables.get_color(ray, Interval{0.001, 20}, std::min(100, n_since_move + 5));
+            colors[i] += hittables.get_color(ray, Interval{0.001, 20}, std::min(10, n_since_move + 2));
             Uint32* row = offset(pixels, r * pitch);
             row[c] = (colors[i] / n_since_move).as_argb();
         }

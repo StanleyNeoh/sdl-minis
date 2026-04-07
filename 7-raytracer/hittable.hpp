@@ -130,5 +130,43 @@ struct Plane: Hittable {
     }
 };
 
+struct WireFrame: Hittable {
+    Vec3 pos;
+    Vec3 dim;
+    float thickness = 0.01;
+
+    WireFrame(const Vec3& pos, const Vec3& dim, Material* mat): Hittable(mat), pos(pos), dim(dim) {}
+
+    bool hit(const Ray& ray, const Interval& trange, HitRecord& record) const {
+        bool has_hit = false;
+        float closest_so_far = FLT_MAX;
+        auto check = [&](Ray::CutRayRes& res) {
+            if (res.t < closest_so_far && trange.contains(res.t)) {
+                record.set(ray, mat, res.t, res.normal);
+                closest_so_far = res.t;
+                has_hit = true;
+            }
+        };
+
+        Ray::CutRayRes res;
+        if (ray.cutRay(Ray(pos, {dim.x, 0, 0}), thickness, res)) check(res);
+        if (ray.cutRay(Ray(pos, {0, dim.y, 0}), thickness, res)) check(res);
+        if (ray.cutRay(Ray(pos, {0, 0, dim.z}), thickness, res)) check(res);
+        Vec3 pos1 = pos + Vec3{dim.x, dim.y, 0};
+        if (ray.cutRay(Ray(pos1, {-dim.x, 0, 0}), thickness, res)) check(res);
+        if (ray.cutRay(Ray(pos1, {0, -dim.y, 0}), thickness, res)) check(res);
+        if (ray.cutRay(Ray(pos1, {0, 0, dim.z}), thickness, res)) check(res);
+        Vec3 pos2 = pos + Vec3{0, dim.y, dim.z};
+        if (ray.cutRay(Ray(pos2, {dim.x, 0, 0}), thickness, res)) check(res);
+        if (ray.cutRay(Ray(pos2, {0, -dim.y, 0}), thickness, res)) check(res);
+        if (ray.cutRay(Ray(pos2, {0, 0, -dim.z}), thickness, res)) check(res);
+        Vec3 pos3 = pos + Vec3{dim.x, 0, dim.z};
+        if (ray.cutRay(Ray(pos3, {-dim.x, 0, 0}), thickness, res)) check(res);
+        if (ray.cutRay(Ray(pos3, {0, dim.y, 0}), thickness, res)) check(res);
+        if (ray.cutRay(Ray(pos3, {0, 0, -dim.z}), thickness, res)) check(res);
+        return has_hit;
+    }
+};
+
 
 #endif

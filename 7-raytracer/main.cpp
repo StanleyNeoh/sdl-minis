@@ -42,6 +42,7 @@ int main() {
 
     SDL_Texture* screen_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, win_w, win_h);
     Camera<win_w, win_h> camera;
+    UniformGlow greenGlowMat(Vec3{0, 1, 0});
     GradientGlow skyMat(Vec3{0, -1, 0}, Vec3{1, 1, 1}, Vec3{0.5, 0.7, 1.0});
     Lambertian floorMat(Vec3{0, 0.5, 0.01});
     Lambertian lambertMat(Vec3{0.5, 0.5, 0.5});
@@ -56,6 +57,7 @@ int main() {
     Sphere sphere3(Vec3{-4.0f, 0, 10}, 1.0f, &lambertMat);
     Cube cube(Vec3{2, 0, 10}, Vec3{1, 1 ,1}, &dielectricMat2);
     Plane floor(Vec3{0, -1, 0}, Vec3{0, 1, 0}, &lambertMat);
+    WireFrame wire(Vec3{-3.0, -1.0, 9}, Vec3{2, 2, 2}, &greenGlowMat);
     Hittables hittables(&skyMat);
     hittables.add(&sphere);
     hittables.add(&sphere2);
@@ -63,6 +65,7 @@ int main() {
     hittables.add(&sphere3);
     hittables.add(&cube);
     hittables.add(&floor);
+    hittables.add(&wire);
 
     bool done = false;
     Uint32 last_time = SDL_GetTicks();

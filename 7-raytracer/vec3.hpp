@@ -138,6 +138,13 @@ struct Vec3 {
         return *this;
     }
 
+    Vec3& operator*=(float k) {
+        x *= k;
+        y *= k;
+        z *= k;
+        return *this;
+    }
+
     bool operator<(const Vec3& other) const {
         return (
             x < other.x &&
