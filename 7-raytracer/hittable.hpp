@@ -2,19 +2,12 @@
 #define RAYTRACER_HITTABLE
 
 #include "vec3.hpp"
+#include "utils.hpp"
 #include <vector>
 #include <iostream>
 
 struct Ray;
 
-struct TRange {
-    float min_t;
-    float max_t;
-
-    float contains(float t) {
-        return t >= min_t && t <= max_t;
-    }
-};
 struct HitRecord {
     Vec3 p;
     Vec3 normal;
@@ -25,7 +18,7 @@ struct HitRecord {
 };
 
 struct Hittable {
-    virtual bool hit(Ray& ray, TRange trange, HitRecord& record) const = 0;
+    virtual bool hit(Ray& ray, Interval trange, HitRecord& record) const = 0;
 };
 
 struct Hittables: Hittable {
@@ -35,7 +28,7 @@ struct Hittables: Hittable {
         hittables.push_back(hittable);
     }
 
-    virtual bool hit(Ray& ray, TRange trange, HitRecord& record) const override;
+    virtual bool hit(Ray& ray, Interval trange, HitRecord& record) const override;
 };
 
 struct Sphere: Hittable {
@@ -44,7 +37,7 @@ struct Sphere: Hittable {
 
     Sphere(const Vec3& center, float rad): center(center), rad(rad) {}
 
-    virtual bool hit(Ray& ray, TRange trange, HitRecord& record) const override;
+    virtual bool hit(Ray& ray, Interval trange, HitRecord& record) const override;
 };
 
 struct Cube: Hittable {
@@ -53,7 +46,7 @@ struct Cube: Hittable {
 
     Cube(const Vec3& pos, const Vec3& dim): pos(pos), dim(dim) {}
 
-    virtual bool hit(Ray& ray, TRange trange, HitRecord& record) const override;
+    virtual bool hit(Ray& ray, Interval trange, HitRecord& record) const override;
 };
 
 struct Plane: Hittable {
@@ -62,7 +55,7 @@ struct Plane: Hittable {
 
     Plane(const Vec3& normal, const Vec3& pos): normal(normal), pos(pos) {}
 
-    virtual bool hit(Ray& ray, TRange trange, HitRecord& record) const override;
+    virtual bool hit(Ray& ray, Interval trange, HitRecord& record) const override;
 };
 
 

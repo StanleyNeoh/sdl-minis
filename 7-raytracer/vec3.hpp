@@ -3,11 +3,22 @@
 
 #include <cmath>
 #include <iostream>
+#include "utils.hpp"
 
 struct Vec3 {
     float x = 0.0f;
     float y = 0.0f;
     float z = 0.0f;
+
+    static Vec3 random_unit() {
+        float u = random_float(0.0f, 2 * M_PI);
+        float v = random_float(0.0f, 2 * M_PI);
+        return Vec3{
+            std::sin(v) * std::sin(u),
+            std::sin(v) * std::cos(u),
+            std::cos(v)
+        };
+    }
 
     float dot(const Vec3& other) const {
         return x * other.x + y * other.y + z * other.z;
@@ -77,6 +88,16 @@ struct Vec3 {
         z /= f;
     }
 
+    Uint32 as_argb() {
+        static const Interval interval(0.000, 0.9999);
+        int a = 255;
+        int r = 256 * interval.clamp(x);
+        int g = 256 * interval.clamp(y);
+        int b = 256 * interval.clamp(z);
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
+
     Vec3 operator-() const {
         return {-x, -y, -z};
     }
@@ -92,6 +113,13 @@ struct Vec3 {
         x -= other.x;
         y -= other.y;
         z -= other.z;
+        return *this;
+    }
+
+    Vec3& operator/=(float k) {
+        x /= k;
+        y /= k;
+        z /= k;
         return *this;
     }
 

@@ -7,7 +7,7 @@ void HitRecord::set_face_normal(const Ray& ray, const Vec3& outward_normal) {
     normal = front_face ? outward_normal : -outward_normal;
 }
 
-bool Hittables::hit(Ray& ray, TRange trange, HitRecord& record) const {
+bool Hittables::hit(Ray& ray, Interval trange, HitRecord& record) const {
     bool has_hit = false;
     for (Hittable* ptr: hittables) {
         if (ptr->hit(ray, trange, record)) {
@@ -22,7 +22,7 @@ bool Hittables::hit(Ray& ray, TRange trange, HitRecord& record) const {
     return !has_hit;
 }
 
-bool Sphere::hit(Ray& ray, TRange trange, HitRecord& record) const {
+bool Sphere::hit(Ray& ray, Interval trange, HitRecord& record) const {
     Vec3 oc = center - ray.orig;
     float a = ray.dir.len2();
     float h = oc.dot(ray.dir);
@@ -43,11 +43,11 @@ bool Sphere::hit(Ray& ray, TRange trange, HitRecord& record) const {
     record.t = root;
     record.p = ray.at(root);
     record.set_face_normal(ray, (record.p - center) / rad);
-    ray.color = Vec3{1, 0, 0};
+    ray.color = 0.5 * (record.normal + Vec3{1,1,1});
     return true;
 }
 
-bool Cube::hit(Ray& ray, TRange trange, HitRecord& record) const {
+bool Cube::hit(Ray& ray, Interval trange, HitRecord& record) const {
     Vec3 opp = pos + dim;
     int count = 0;
     Ray::CutPlaneSpanRes hits[2];
@@ -71,13 +71,13 @@ bool Cube::hit(Ray& ray, TRange trange, HitRecord& record) const {
         record.t = hits[i].t;
         record.p = ray.at(record.t);
         record.set_face_normal(ray, hits[i].normal);
-        ray.color = Vec3{0, 1, 0};
+        ray.color = 0.5 * (record.normal + Vec3{1,1,1});
         return true;
     }
     return false;
 }
 
-bool Plane::hit(Ray& ray, TRange trange, HitRecord& record) const {
+bool Plane::hit(Ray& ray, Interval trange, HitRecord& record) const {
     int count = 0;
     Ray::CutPlaneNormalRes res;
     if (!ray.cutPlaneNormal(pos, normal, res)) return false;
@@ -85,6 +85,6 @@ bool Plane::hit(Ray& ray, TRange trange, HitRecord& record) const {
     record.t = res.t;
     record.p = ray.at(record.t);
     record.set_face_normal(ray, normal);
-    ray.color = Vec3{0, 0, 1};
+    ray.color = Vec3{0, 0.5, 0};
     return true;
 }

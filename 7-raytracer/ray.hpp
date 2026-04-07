@@ -22,10 +22,6 @@ struct Ray {
         return orig + t * dir;
     }
 
-    Uint32 argb_color() {
-        return to_argb(255.999 * color.x, 255.999 * color.y, 255.999 * color.z, 255);
-    }
-
     bool cutPlaneSpan(const Vec3& x, const Vec3& a, const Vec3& b, CutPlaneSpanRes& res, float eps = 1e-6) const {
         Vec3 y = x - orig;
         Vec3 yd = y.cross(dir);

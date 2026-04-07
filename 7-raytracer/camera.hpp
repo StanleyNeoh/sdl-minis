@@ -14,17 +14,19 @@
 struct Camera {
     int w;
     int h;
-    Vec3 center = {0, 0, 0};
+    float mouse_sens = 0.005f;
+    int samples_per_pix = 1;
 
+    Vec3 center = {0, 0, 0};
     float vp_focal_length = 1.0;
     float vp_h = 2.0;
     float vp_w;
     Vec3 vp_u = {1, 0, 0};    // points right on viewport
     Vec3 vp_v = {0, 1, 0};    // points down on viewport
+    Vec3 pixel00_loc;
 
     float yaw = 0.0f;
     float pitch = 0.0f;
-    float mouse_sens = 0.005f;
 
     Vec3 forward_dir() {
         return vp_u.cross(vp_v);
@@ -59,6 +61,9 @@ struct Camera {
             std::cos(yaw) * std::sin(pitch)
         };
         Vec3 forward = forward_dir();
+        Vec3 scaled_u = vp_w * vp_u;
+        Vec3 scaled_v = vp_h * vp_v;
+        pixel00_loc = forward * vp_focal_length - (scaled_u / 2) - (scaled_v / 2) + 0.5 * (scaled_u / w + scaled_v / h);
         forward.y = 0;
         forward.normalize();
 
@@ -73,33 +78,47 @@ struct Camera {
     }
 
     void scan(Uint32* pixels, int pitch, const Hittables& hittables) {
-        float halfh = h / 2.0;
-        float halfw = w / 2.0;
-        Vec3 scaled_u = (vp_w / w) * vp_u;
-        Vec3 scaled_v = (vp_h / h) * vp_v;
-        Vec3 dz = forward_dir() * vp_focal_length;
+        Vec3 pix_u = (vp_w / w) * vp_u;
+        Vec3 pix_v = (vp_h / h) * vp_v;
         #ifdef _OPENMP
             #pragma omp parallel for schedule(static)
             for (int i = 0; i < h * w; i++) {
                 int r = i / w;
                 int c = i % w;
-                Uint32* row = offset(pixels, r * pitch);
-                Vec3 dir = dz + (static_cast<float>(r) - halfh) * scaled_v + (static_cast<float>(c) - halfw) * scaled_u;
-                Ray ray{center, dir.unit()};
                 HitRecord record;
-                hittables.hit(ray, TRange{0, 20}, record);
-                row[c] = ray.argb_color();
+                Vec3 color{0, 0, 0};
+                for (int it = 0; it < samples_per_pix; it++) {
+                    Vec3 dir = (
+                        pixel00_loc 
+                        + (random_float() - 0.5 + r) * pix_v 
+                        + (random_float() - 0.5 + c) * pix_u
+                    ).unit();
+                    Ray ray{center, dir};
+                    hittables.hit(ray, Interval{0, 20}, record);
+                    color += ray.color;
+                }
+                color /= samples_per_pix;
+                Uint32* row = offset(pixels, r * pitch);
+                row[c] = color.as_argb();
             }
         #else
             for (int i = 0; i < h; i++) {
                 Uint32* row = offset(pixels, i * pitch);
-                Vec3 dir = dz + (static_cast<float>(i) - halfh) * scaled_v;
                 for (int j = 0; j < w; j++) {
-                    Vec3 dy = (static_cast<float>(j) - halfw) * scaled_u;
-                    Ray ray{center, (dir + dy).unit()};
                     HitRecord record;
-                    hittables.hit(ray, TRange{0, 20}, record);
-                    row[j] = ray.argb_color();
+                    Vec3 color{0, 0, 0};
+                    for (int it = 0; it < samples_per_pix; it++) {
+                        Vec3 dir = (
+                            pixel00_loc 
+                            + (random_float() - 1.0f + i) * pix_v
+                            + (random_float() - 1.0f + j) * pix_u
+                        ).unit();
+                        Ray ray{center, dir};
+                        hittables.hit(ray, Interval{0, 20}, record);
+                        color += ray.color;
+                    }
+                    color /= samples_per_pix;
+                    row[j] = color.as_argb();
                 }
             }
         #endif
