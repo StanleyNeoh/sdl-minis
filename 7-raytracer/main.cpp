@@ -3,8 +3,8 @@
 #include "camera.hpp"
 #include "hittable.hpp"
 
-int win_w = 1280;
-int win_h = 800;
+constexpr int win_w = 1280;
+constexpr int win_h = 800;
 SDL_Window* window;
 SDL_Renderer* renderer;
 
@@ -41,7 +41,7 @@ int main() {
     UI ui;
 
     SDL_Texture* screen_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, win_w, win_h);
-    Camera camera(win_w, win_h);
+    Camera<win_w, win_h> camera;
     Sphere sphere(Vec3{0, 0, 10}, 1.0f);
     Cube cube(Vec3{5, 0, 10}, Vec3{1, 1 ,1});
     Plane floor(Vec3{0, -1, 0}, Vec3{0, 1, 0});
