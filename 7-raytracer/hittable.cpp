@@ -2,12 +2,27 @@
 #include "hittable.hpp"
 #include "ray.hpp"
 
-void Hittable::HitRecord::set_face_normal(const Ray& ray, const Vec3& outward_normal) {
+void HitRecord::set_face_normal(const Ray& ray, const Vec3& outward_normal) {
     front_face = ray.dir.dot(outward_normal) < 0;
     normal = front_face ? outward_normal : -outward_normal;
 }
 
-bool Sphere::hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record) const {
+bool Hittables::hit(Ray& ray, TRange trange, HitRecord& record) const {
+    bool has_hit = false;
+    for (Hittable* ptr: hittables) {
+        if (ptr->hit(ray, trange, record)) {
+            trange.max_t = record.t;
+            has_hit = true;
+        }
+    }
+    if (!has_hit) {
+        float a = 0.5 * (ray.dir.unit().y + 1.0);
+        ray.color = (1.0 - a) * Vec3{1.0, 1.0, 1.0} + a * Vec3{0.5, 0.7, 1.0};
+    }
+    return !has_hit;
+}
+
+bool Sphere::hit(Ray& ray, TRange trange, HitRecord& record) const {
     Vec3 oc = center - ray.orig;
     float a = ray.dir.len2();
     float h = oc.dot(ray.dir);
@@ -18,9 +33,9 @@ bool Sphere::hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& reco
     } 
     float sqrtd = std::sqrt(discriminant);
     auto root = (h - sqrtd) / a;
-    if (root <= ray_tmin || ray_tmax <= root) {
+    if (!trange.contains(root)) {
         root = (h + sqrtd) / a;
-        if (root <= ray_tmin || ray_tmax <= root) {
+        if (!trange.contains(root)) {
             return false;
         }
     }
@@ -28,14 +43,11 @@ bool Sphere::hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& reco
     record.t = root;
     record.p = ray.at(root);
     record.set_face_normal(ray, (record.p - center) / rad);
+    ray.color = Vec3{1, 0, 0};
     return true;
 }
 
-void Sphere::color(Ray& ray) const {
-    ray.color = Vec3{1, 0, 0};
-}
-
-bool Cube::hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record) const {
+bool Cube::hit(Ray& ray, TRange trange, HitRecord& record) const {
     Vec3 opp = pos + dim;
     int count = 0;
     Ray::CutPlaneSpanRes hits[2];
@@ -54,36 +66,25 @@ bool Cube::hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record
     if (ray.cutPlaneSpan(opp, {0, -dim.y, 0}, {0, 0, -dim.z}, res)) check(res);
     if (count != 2) return false;
     if (hits[0].t > hits[1].t) std::swap(hits[0], hits[1]);
-    if (hits[0].t >= ray_tmin && hits[0].t <= ray_tmax) {
-        record.t = hits[0].t;
-        record.p = hits[0].pos;
-        record.set_face_normal(ray, hits[0].normal);
-        return true;
-    }
-    if (hits[1].t >= ray_tmin && hits[1].t <= ray_tmax) {
-        record.t = hits[1].t;
-        record.p = hits[1].pos;
-        record.set_face_normal(ray, hits[1].normal);
+    for (int i = 0; i < 2; i++) {
+        if (!trange.contains(hits[i].t)) continue;
+        record.t = hits[i].t;
+        record.p = ray.at(record.t);
+        record.set_face_normal(ray, hits[i].normal);
+        ray.color = Vec3{0, 1, 0};
         return true;
     }
     return false;
 }
 
-void Cube::color(Ray& ray) const {
-    ray.color = Vec3{0, 1, 0};
-}
-
-bool Plane::hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record) const {
+bool Plane::hit(Ray& ray, TRange trange, HitRecord& record) const {
     int count = 0;
     Ray::CutPlaneNormalRes res;
     if (!ray.cutPlaneNormal(pos, normal, res)) return false;
-    if (res.t < ray_tmin || res.t > ray_tmax) return false;
+    if (!trange.contains(res.t)) return false;
     record.t = res.t;
-    record.p = res.pos;
+    record.p = ray.at(record.t);
     record.set_face_normal(ray, normal);
-    return true;
-}
-
-void Plane::color(Ray& ray) const {
     ray.color = Vec3{0, 0, 1};
+    return true;
 }

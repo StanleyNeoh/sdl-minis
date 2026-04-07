@@ -45,10 +45,10 @@ int main() {
     Sphere sphere(Vec3{0, 0, 10}, 1.0f);
     Cube cube(Vec3{5, 0, 10}, Vec3{1, 1 ,1});
     Plane floor(Vec3{0, -1, 0}, Vec3{0, 1, 0});
-    std::vector<Hittable*> hittables;
-    hittables.push_back(&sphere);
-    hittables.push_back(&cube);
-    hittables.push_back(&floor);
+    Hittables hittables;
+    hittables.add(&sphere);
+    hittables.add(&cube);
+    hittables.add(&floor);
 
     bool done = false;
     Uint32 last_time = SDL_GetTicks();

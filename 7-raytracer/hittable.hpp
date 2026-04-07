@@ -2,22 +2,40 @@
 #define RAYTRACER_HITTABLE
 
 #include "vec3.hpp"
+#include <vector>
 #include <iostream>
 
 struct Ray;
 
+struct TRange {
+    float min_t;
+    float max_t;
+
+    float contains(float t) {
+        return t >= min_t && t <= max_t;
+    }
+};
+struct HitRecord {
+    Vec3 p;
+    Vec3 normal;
+    float t;
+    bool front_face;
+
+    void set_face_normal(const Ray& ray, const Vec3& outward_normal);
+};
+
 struct Hittable {
-    struct HitRecord {
-        Vec3 p;
-        Vec3 normal;
-        float t;
-        bool front_face;
+    virtual bool hit(Ray& ray, TRange trange, HitRecord& record) const = 0;
+};
 
-        void set_face_normal(const Ray& ray, const Vec3& outward_normal);
-    };
+struct Hittables: Hittable {
+    std::vector<Hittable*> hittables;
 
-    virtual bool hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record) const = 0;
-    virtual void color(Ray& ray) const = 0;
+    void add(Hittable* hittable) {
+        hittables.push_back(hittable);
+    }
+
+    virtual bool hit(Ray& ray, TRange trange, HitRecord& record) const override;
 };
 
 struct Sphere: Hittable {
@@ -26,8 +44,7 @@ struct Sphere: Hittable {
 
     Sphere(const Vec3& center, float rad): center(center), rad(rad) {}
 
-    virtual bool hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record) const override;
-    virtual void color(Ray& ray) const override;
+    virtual bool hit(Ray& ray, TRange trange, HitRecord& record) const override;
 };
 
 struct Cube: Hittable {
@@ -36,15 +53,7 @@ struct Cube: Hittable {
 
     Cube(const Vec3& pos, const Vec3& dim): pos(pos), dim(dim) {}
 
-    bool contains(Vec3& _pos) {
-        return (
-            pos < _pos && 
-            _pos < pos + dim
-        );
-    }
-
-    virtual bool hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record) const override;
-    virtual void color(Ray& ray) const override;
+    virtual bool hit(Ray& ray, TRange trange, HitRecord& record) const override;
 };
 
 struct Plane: Hittable {
@@ -53,8 +62,7 @@ struct Plane: Hittable {
 
     Plane(const Vec3& normal, const Vec3& pos): normal(normal), pos(pos) {}
 
-    virtual bool hit(const Ray& ray, float ray_tmin, float ray_tmax, HitRecord& record) const override;
-    virtual void color(Ray& ray) const override;
+    virtual bool hit(Ray& ray, TRange trange, HitRecord& record) const override;
 };
 
 

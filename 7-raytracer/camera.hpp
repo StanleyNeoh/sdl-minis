@@ -72,7 +72,7 @@ struct Camera {
         if (state[SDL_SCANCODE_LCTRL]) center.y += speed;
     }
 
-    void scan(Uint32* pixels, int pitch, const std::vector<Hittable*>& hittables) {
+    void scan(Uint32* pixels, int pitch, const Hittables& hittables) {
         float halfh = h / 2.0;
         float halfw = w / 2.0;
         Vec3 scaled_u = (vp_w / w) * vp_u;
@@ -86,7 +86,8 @@ struct Camera {
                 Uint32* row = offset(pixels, r * pitch);
                 Vec3 dir = dz + (static_cast<float>(r) - halfh) * scaled_v + (static_cast<float>(c) - halfw) * scaled_u;
                 Ray ray{center, dir.unit()};
-                ray.cast(hittables);
+                HitRecord record;
+                hittables.hit(ray, TRange{0, 20}, record);
                 row[c] = ray.argb_color();
             }
         #else
@@ -96,14 +97,15 @@ struct Camera {
                 for (int j = 0; j < w; j++) {
                     Vec3 dy = (static_cast<float>(j) - halfw) * scaled_u;
                     Ray ray{center, (dir + dy).unit()};
-                    ray.cast(hittables);
+                    HitRecord record;
+                    hittables.hit(ray, TRange{0, 20}, record);
                     row[j] = ray.argb_color();
                 }
             }
         #endif
     }
 
-    void render(SDL_Texture* screen_tex, const std::vector<Hittable*>& hittables) {
+    void render(SDL_Texture* screen_tex, const Hittables& hittables) {
         Uint32* pixels;
         int pitch;
         SDL_LockTexture(screen_tex, NULL, (void**)&pixels, &pitch);
