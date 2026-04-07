@@ -91,12 +91,15 @@ struct Vec3 {
     Uint32 as_argb() {
         static const Interval interval(0.000, 0.9999);
         int a = 255;
-        int r = 256 * interval.clamp(x);
-        int g = 256 * interval.clamp(y);
-        int b = 256 * interval.clamp(z);
+        int r = 256 * interval.clamp(lin_to_gamma(x));
+        int g = 256 * interval.clamp(lin_to_gamma(y));
+        int b = 256 * interval.clamp(lin_to_gamma(z));
         return (a << 24) | (r << 16) | (g << 8) | b;
     }
 
+    bool near_zero(float eps=1e-6) {
+        return abs(x) < eps && abs(y) < eps && abs(z) < eps;
+    }
 
     Vec3 operator-() const {
         return {-x, -y, -z};
@@ -141,6 +144,10 @@ struct Vec3 {
 
     friend Vec3 operator-(const Vec3& a, const Vec3& b) {
         return {a.x - b.x, a.y - b.y, a.z - b.z};
+    }
+
+    friend Vec3 operator*(const Vec3& a, const Vec3& b) {
+        return {a.x * b.x, a.y * b.y, a.z * b.z};
     }
 
     friend Vec3 operator*(float k, const Vec3& b) {

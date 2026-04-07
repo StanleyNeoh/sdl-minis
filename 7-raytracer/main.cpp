@@ -42,10 +42,16 @@ int main() {
 
     SDL_Texture* screen_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, win_w, win_h);
     Camera<win_w, win_h> camera;
-    Sphere sphere(Vec3{0, 0, 10}, 1.0f);
-    Cube cube(Vec3{5, 0, 10}, Vec3{1, 1 ,1});
-    Plane floor(Vec3{0, -1, 0}, Vec3{0, 1, 0});
-    Hittables hittables;
+    UniformGlow floorMat(Vec3{0, 0.75, 0.01});
+    SurfaceNormalGlow objMat;
+    GradientGlow skyMat(Vec3{0, -1, 0}, Vec3{1, 1, 1}, Vec3{0.5, 0.7, 1.0});
+    Lambertian lambertMat(Vec3{0.5, 0.5, 0.5});
+    Metal metalMat(Vec3{0.8, 0.8, 0.9}, 0.3);
+
+    Sphere sphere(Vec3{0, 0, 10}, 1.0f, &metalMat);
+    Cube cube(Vec3{5, 0, 10}, Vec3{1, 1 ,1}, &lambertMat);
+    Plane floor(Vec3{0, -1, 0}, Vec3{0, 1, 0}, &lambertMat);
+    Hittables hittables(&skyMat);
     hittables.add(&sphere);
     hittables.add(&cube);
     hittables.add(&floor);
@@ -70,7 +76,6 @@ int main() {
         }
 
         camera.update(dt);
-
         camera.render(screen_tex, hittables);
         SDL_RenderCopy(renderer, screen_tex, NULL, NULL);
         SDL_RenderPresent(renderer);

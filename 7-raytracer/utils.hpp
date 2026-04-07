@@ -7,7 +7,7 @@ struct Interval {
     float min_t;
     float max_t;
 
-    float contains(float t) const {
+    bool contains(float t) const {
         return t >= min_t && t <= max_t;
     }
 
@@ -30,6 +30,11 @@ inline float random_float() {
 
 inline float random_float(float min, float max) {
     return min + (max - min) * random_float();
+}
+
+inline float lin_to_gamma(float lin) {
+    if (lin > 0) return std::sqrt(lin);
+    return 0;
 }
 
 

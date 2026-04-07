@@ -1,4 +1,4 @@
-add_executable(raytracer main.cpp hittable.cpp)
+add_executable(raytracer main.cpp)
 
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)

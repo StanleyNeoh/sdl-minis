@@ -2,25 +2,24 @@
 #define RAYTRACER_RAY
 
 #include <vector>
-#include "hittable.hpp"
 #include "vec3.hpp"
 #include "utils.hpp"
 #include <SDL.h>
 
 struct Ray {
-    Vec3 orig;
-    Vec3 dir;
-    Vec3 color = {0, 0, 0};
+    Vec3 orig = {0, 0, 0};
+    Vec3 dir = {0, 0, 0};
+
+    Vec3 at(float t) const {
+        return orig + t * dir;
+    }
+
     struct CutPlaneSpanRes {
         float ca;
         float cb;
         float t;
         Vec3 normal; // a x b;
     };
-
-    Vec3 at(float t) const {
-        return orig + t * dir;
-    }
 
     bool cutPlaneSpan(const Vec3& x, const Vec3& a, const Vec3& b, CutPlaneSpanRes& res, float eps = 1e-6) const {
         Vec3 y = x - orig;

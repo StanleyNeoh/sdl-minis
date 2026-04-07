@@ -5,6 +5,7 @@
 #include "vec3.hpp"
 #include "ray.hpp"
 #include "utils.hpp"
+#include "hittable.hpp"
 #include <SDL.h>
 
 // Take z as forward
@@ -107,11 +108,10 @@ struct Camera {
             int r = i / w;
             int c = i % w;
 
-            Vec3& color = colors[i];
             float rf = r;
             float cf = c;
             if (n_since_move == 1) {
-                color = {0, 0, 0};
+                colors[i] = {0, 0, 0};
             } else {
                 rf += random_float() - 0.5;
                 cf += random_float() - 0.5;
@@ -119,11 +119,9 @@ struct Camera {
 
             Vec3 dir = (pixel00_loc + rf * pix_v + cf * pix_u).unit();
             Ray ray{center, dir};
-            HitRecord record;
-            hittables.hit(ray, Interval{0, 20}, record);
-            color += ray.color;
+            colors[i] += hittables.get_color(ray, Interval{0.001, 20}, std::min(100, n_since_move + 5));
             Uint32* row = offset(pixels, r * pitch);
-            row[c] = (color / n_since_move).as_argb();
+            row[c] = (colors[i] / n_since_move).as_argb();
         }
     }
 
