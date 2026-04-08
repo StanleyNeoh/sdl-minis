@@ -26,21 +26,24 @@ struct Hittables {
         hittables.push_back(hittable);
     }
 
-    Vec3 get_color(const Ray& ray, const Interval& trange, int jumps_left) const {
-        if (jumps_left <= 0) {
-            return {0, 0, 0};
-        }
-
+    bool hit(const Ray& ray, Interval search_range, HitRecord& record) const {
         bool has_hit = false;
-        HitRecord record;
-        Interval search_range = trange;
         for (Hittable* ptr: hittables) {
             if (ptr->hit(ray, search_range, record)) {
                 search_range.max_t = record.t;
                 has_hit = true;
             }
         }
+        return has_hit;
+    }
 
+    Vec3 get_color(const Ray& ray, const Interval& trange, int jumps_left) const {
+        if (jumps_left <= 0) {
+            return {0, 0, 0};
+        }
+
+        HitRecord record;
+        bool has_hit = hit(ray, trange, record);
         if (!has_hit) record.set(ray, bgMat);
         
         Vec3 attenuation;

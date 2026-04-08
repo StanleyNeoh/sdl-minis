@@ -32,6 +32,13 @@ inline float random_float(float min, float max) {
     return min + (max - min) * random_float();
 }
 
+inline void vec2_random(float& x, float& y, float max_length = 1.0) {
+    float r = random_float() * max_length;
+    float u = random_float() * 2 * M_PI;
+    x = r * std::cos(u);
+    y = r * std::sin(u);
+}
+
 inline float lin_to_gamma(float lin) {
     if (lin > 0) return std::sqrt(lin);
     return 0;

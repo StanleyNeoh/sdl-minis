@@ -15,14 +15,16 @@
 template <int w, int h>
 struct Camera {
     static inline constexpr int mind = std::min(w, h);
-
-    // Constants
-    float mouse_sens = 0.005f;
-    float vp_focal_length = 1.0;
-    float vp_h = 2.0;
-    float vp_w = (static_cast<float>(w) / h) * vp_h;
+    const Hittables& hittables;
 
     // State
+    float mouse_sens = 0.005f;
+    Interval search_range = {0.001, 20};
+    float vp_focal_length = 1.0;
+    float fov = 90;
+    float aperture_rad = 0.0f;
+    float vp_h;
+    float vp_w;
     Vec3 center = {0, 0, 0};
     Vec3 vp_u = {1, 0, 0};    // points right on viewport
     Vec3 vp_v = {0, 1, 0};    // points down on viewport
@@ -35,8 +37,62 @@ struct Camera {
     std::vector<Vec3> colors = std::vector<Vec3>(w * h, Vec3{0, 0, 0});
     int n_since_move = 0;
 
+    Camera(const Hittables& hittables): hittables(hittables) {
+        update_vp();
+    }
+
     Vec3 forward_dir() {
         return vp_u.cross(vp_v);
+    }
+
+    void update_vp() {
+        vp_h = 2 * std::tan(fov / 360 * M_PI) * vp_focal_length;
+        vp_w = (static_cast<float>(w) / h) * vp_h;
+    }
+
+    void auto_focus() {
+        Ray ray(center, forward_dir());
+        HitRecord record;
+        if (hittables.hit(ray, search_range, record)) {
+            vp_focal_length = record.t;
+            update_vp();
+        };
+    }
+
+    void handle_keycode(SDL_Keycode keycode) {
+        switch (keycode) {
+        case SDLK_EQUALS:
+            stride--;
+            if (stride < 1) stride = 1;
+            break;
+        case SDLK_MINUS:
+            stride++;
+            if (stride > mind) stride = mind;
+            break;
+        case SDLK_RIGHTBRACKET:
+            fov--;
+            if (fov < 5) fov = 5;  
+            update_vp();
+            break;
+        case SDLK_LEFTBRACKET:
+            fov++;
+            if (fov > 150) fov = 150;  
+            update_vp();
+            break;
+        case SDLK_QUOTE:
+            aperture_rad += 0.001;
+            break;
+        case SDLK_SEMICOLON:
+            aperture_rad -= 0.001;
+            if (aperture_rad < 0) aperture_rad = 0.0f;
+            break;
+        case SDLK_f:
+            auto_focus();
+            break;
+        default:
+            return;
+        }
+        n_since_move = 0;
     }
 
     void handle_event(const SDL_Event& event) {
@@ -51,13 +107,7 @@ struct Camera {
                 if (pitch < -1.5f) pitch = -1.5f;
             }
         } else if (event.type == SDL_KEYDOWN) {
-            if (event.key.keysym.sym == SDLK_EQUALS) {
-                stride--;
-            } else if (event.key.keysym.sym == SDLK_MINUS) {
-                stride++;
-            }
-            if (stride < 1) stride = 1;
-            if (stride > mind) stride = mind;
+            handle_keycode(event.key.keysym.sym);
         }
     }
 
@@ -105,9 +155,11 @@ struct Camera {
             center.y += speed;
             n_since_move = 0;
         }
+        if (stride < 1) stride = 1;
+        if (stride > mind) stride = mind;
     }
 
-    void scan(Uint32* pixels, int pitch, const Hittables& hittables) {
+    void scan(Uint32* pixels, int pitch) {
         Vec3 pix_u = (vp_w / w) * vp_u;
         Vec3 pix_v = (vp_h / h) * vp_v;
         n_since_move++;
@@ -116,6 +168,7 @@ struct Camera {
         int n_wchunk = (w + stride - 1) / stride;
         float stride_adjust_r = (vp_h / h) * (stride - 1) / 2.0f;
         float stride_adjust_c = (vp_w / w) * (stride - 1) / 2.0f;
+        int nbounce = n_since_move == 1 ? 10 : 100;
 
         #pragma omp parallel
         {
@@ -138,9 +191,12 @@ struct Camera {
                     cf += (random_float() - 0.5) * stride;
                 }
 
-                Vec3 dir = (pixel00_loc + rf * pix_v + cf * pix_u).unit();
-                Ray ray{center, dir};
-                colors[ind] += hittables.get_color(ray, Interval{0.001, 20}, std::min(100, n_since_move + 1));
+                float du, dv;
+                vec2_random(du, dv, aperture_rad);
+                Vec3 defocus_offset = du * vp_u + dv * vp_v;
+                Vec3 dir = (pixel00_loc + rf * pix_v + cf * pix_u - defocus_offset).unit();
+                Ray ray{center + defocus_offset, dir};
+                colors[ind] += hittables.get_color(ray, search_range, nbounce);
             }
 
             if (stride > 1) {
@@ -175,11 +231,11 @@ struct Camera {
         }
     }
 
-    void render(SDL_Texture* screen_tex, const Hittables& hittables) {
+    void render(SDL_Texture* screen_tex) {
         Uint32* pixels;
         int pitch;
         SDL_LockTexture(screen_tex, NULL, (void**)&pixels, &pitch);
-        scan(pixels, pitch, hittables);
+        scan(pixels, pitch);
         SDL_UnlockTexture(screen_tex);
     }
 };

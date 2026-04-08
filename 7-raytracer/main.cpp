@@ -41,7 +41,6 @@ int main() {
     UI ui;
 
     SDL_Texture* screen_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, win_w, win_h);
-    Camera<win_w, win_h> camera;
     UniformGlow greenGlowMat(Vec3{0, 1, 0});
     GradientGlow skyMat(Vec3{0, -1, 0}, Vec3{1, 1, 1}, Vec3{0.5, 0.7, 1.0});
     Lambertian floorMat(Vec3{0, 0.5, 0.01});
@@ -68,6 +67,8 @@ int main() {
     hittables.add(&floor);
     hittables.add(&wire);
 
+    Camera<win_w, win_h> camera(hittables);
+
     bool done = false;
     Uint32 last_time = SDL_GetTicks();
     while (!done) {
@@ -88,7 +89,7 @@ int main() {
         }
 
         camera.update(dt);
-        camera.render(screen_tex, hittables);
+        camera.render(screen_tex);
         SDL_RenderCopy(renderer, screen_tex, NULL, NULL);
         SDL_RenderPresent(renderer);
     }
