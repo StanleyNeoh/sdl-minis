@@ -14,6 +14,8 @@
 
 template <int w, int h>
 struct Camera {
+    static inline constexpr int mind = std::min(w, h);
+
     // Constants
     float mouse_sens = 0.005f;
     float vp_focal_length = 1.0;
@@ -26,6 +28,7 @@ struct Camera {
     Vec3 vp_v = {0, 1, 0};    // points down on viewport
     float yaw = 0.0f;
     float pitch = 0.0f;
+    int stride = 1;
     
     // Cached
     Vec3 pixel00_loc;
@@ -47,6 +50,14 @@ struct Camera {
                 if (pitch > 1.5f) pitch = 1.5f;
                 if (pitch < -1.5f) pitch = -1.5f;
             }
+        } else if (event.type == SDL_KEYDOWN) {
+            if (event.key.keysym.sym == SDLK_EQUALS) {
+                stride--;
+            } else if (event.key.keysym.sym == SDLK_MINUS) {
+                stride++;
+            }
+            if (stride < 1) stride = 1;
+            if (stride > mind) stride = mind;
         }
     }
 
@@ -101,27 +112,66 @@ struct Camera {
         Vec3 pix_v = (vp_h / h) * vp_v;
         n_since_move++;
 
-        #ifdef _OPENMP
-        #pragma omp parallel for schedule(static)
-        #endif
-        for (int i = 0; i < h * w; i++) {
-            int r = i / w;
-            int c = i % w;
+        int n_hchunk = (h + stride - 1) / stride;
+        int n_wchunk = (w + stride - 1) / stride;
+        float stride_adjust_r = (vp_h / h) * (stride - 1) / 2.0f;
+        float stride_adjust_c = (vp_w / w) * (stride - 1) / 2.0f;
 
-            float rf = r;
-            float cf = c;
-            if (n_since_move == 1) {
-                colors[i] = {0, 0, 0};
-            } else {
-                rf += random_float() - 0.5;
-                cf += random_float() - 0.5;
+        #pragma omp parallel
+        {
+            #pragma omp for schedule(static)
+            for (int i = 0; i < n_hchunk * n_wchunk; i++) {
+                int r = i / n_wchunk;
+                int c = i % n_wchunk;
+
+                int ri = stride * r;
+                int ci = stride * c;
+                int rl = std::min(stride, h - ri);
+                int cl = std::min(stride, w - ci);
+                int ind = ri * w + ci;
+                float rf = ri + stride_adjust_r;
+                float cf = ci + stride_adjust_c;
+                if (n_since_move == 1) {
+                    colors[ind] = {0, 0, 0};
+                } else {
+                    rf += (random_float() - 0.5) * stride;
+                    cf += (random_float() - 0.5) * stride;
+                }
+
+                Vec3 dir = (pixel00_loc + rf * pix_v + cf * pix_u).unit();
+                Ray ray{center, dir};
+                colors[ind] += hittables.get_color(ray, Interval{0.001, 20}, std::min(100, n_since_move + 1));
             }
 
-            Vec3 dir = (pixel00_loc + rf * pix_v + cf * pix_u).unit();
-            Ray ray{center, dir};
-            colors[i] += hittables.get_color(ray, Interval{0.001, 20}, std::min(10, n_since_move + 2));
-            Uint32* row = offset(pixels, r * pitch);
-            row[c] = (colors[i] / n_since_move).as_argb();
+            if (stride > 1) {
+                #pragma omp barrier
+                #pragma omp for schedule(static)
+                for (int i = 0; i < h * w; i++) {
+                    int r = i / w;
+                    int c = i % w;
+                    int ind = r * w + c;
+                    int rbase = r - (r % stride);
+                    int cbase = c - (c % stride);
+                    int indbase = rbase * w + cbase;
+                    int rbase_nxt = rbase + stride;
+                    int cbase_nxt = cbase + stride;
+                    if (rbase_nxt < h && cbase_nxt < w) {
+                        colors[ind] = (
+                            (rbase_nxt - r) * (cbase_nxt - c) * colors[indbase] 
+                            + (r - rbase) * (cbase_nxt - c) * colors[rbase_nxt * w + c]
+                            + (rbase_nxt - r) * (c - cbase) * colors[rbase * w + cbase_nxt]
+                            + (r - rbase) * (c - cbase) * colors[rbase_nxt * w + cbase_nxt]
+                        ) / (stride * stride);
+                    } else {
+                        colors[ind] = colors[indbase];
+                    }
+                }
+            }
+
+            #pragma omp for schedule(static)
+            for (int i = 0; i < h * w; i++) {
+                pixels[i] = (colors[i] / n_since_move).as_argb();
+            }
         }
     }
 
