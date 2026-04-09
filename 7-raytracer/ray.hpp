@@ -9,6 +9,7 @@
 struct Ray {
     Vec3 orig = {0, 0, 0};
     Vec3 dir = {0, 0, 0};
+    float time = 0.0;
 
     Vec3 at(float t) const {
         return orig + t * dir;

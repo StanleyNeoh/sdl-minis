@@ -56,12 +56,13 @@ struct Hittables {
 };
 
 struct Sphere: Hittable {
-    Vec3 center;
+    Ray center;
     float rad;
 
-    Sphere(const Vec3& center, float rad, Material* mat): Hittable(mat), center(center), rad(rad) {}
+    Sphere(const Ray& center, float rad, Material* mat): Hittable(mat), center(center), rad(rad) {}
 
     bool hit(const Ray& ray, const Interval& trange, HitRecord& record) const override {
+        Vec3 center = this->center.at(ray.time);
         Vec3 oc = center - ray.orig;
         float a = ray.dir.len2();
         float h = oc.dot(ray.dir);
@@ -84,12 +85,13 @@ struct Sphere: Hittable {
 };
 
 struct Cube: Hittable {
-    Vec3 pos;
+    Ray pos;
     Vec3 dim;
 
-    Cube(const Vec3& pos, const Vec3& dim, Material* mat): Hittable(mat), pos(pos), dim(dim) {}
+    Cube(const Ray& pos, const Vec3& dim, Material* mat): Hittable(mat), pos(pos), dim(dim) {}
 
     bool hit(const Ray& ray, const Interval& trange, HitRecord& record) const {
+        Vec3 pos = this->pos.at(ray.time);
         Vec3 opp = pos + dim;
         int count = 0;
         Ray::CutPlaneSpanRes hits[2];
@@ -134,13 +136,14 @@ struct Plane: Hittable {
 };
 
 struct WireFrame: Hittable {
-    Vec3 pos;
+    Ray pos;
     Vec3 dim;
     float thickness = 0.01;
 
-    WireFrame(const Vec3& pos, const Vec3& dim, Material* mat): Hittable(mat), pos(pos), dim(dim) {}
+    WireFrame(const Ray& pos, const Vec3& dim, Material* mat): Hittable(mat), pos(pos), dim(dim) {}
 
     bool hit(const Ray& ray, const Interval& trange, HitRecord& record) const {
+        Vec3 pos = this->pos.at(ray.time);
         bool has_hit = false;
         float closest_so_far = FLT_MAX;
         auto check = [&](Ray::CutRayRes& res) {

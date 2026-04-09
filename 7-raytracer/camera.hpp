@@ -23,6 +23,7 @@ struct Camera {
     float vp_focal_length = 1.0;
     float fov = 90;
     float aperture_rad = 0.0f;
+    float shutter_time = 0.0f;
     float vp_h;
     float vp_w;
     Vec3 center = {0, 0, 0};
@@ -88,6 +89,13 @@ struct Camera {
             break;
         case SDLK_f:
             auto_focus();
+            break;
+        case SDLK_PERIOD:
+            shutter_time += 0.01;
+            break;
+        case SDLK_COMMA:
+            shutter_time -= 0.01;
+            if (shutter_time < 0) shutter_time = 0;
             break;
         default:
             return;
@@ -195,7 +203,7 @@ struct Camera {
                 vec2_random(du, dv, aperture_rad);
                 Vec3 defocus_offset = du * vp_u + dv * vp_v;
                 Vec3 dir = (pixel00_loc + rf * pix_v + cf * pix_u - defocus_offset).unit();
-                Ray ray{center + defocus_offset, dir};
+                Ray ray{center + defocus_offset, dir, random_float() * shutter_time};
                 colors[ind] += hittables.get_color(ray, search_range, nbounce);
             }
 

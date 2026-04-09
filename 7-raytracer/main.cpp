@@ -51,13 +51,13 @@ int main() {
     Dielectric invDielectricMat({1, 1, 1}, 1 / 1.3);
     Dielectric dielectricMat2({1, 1, 0.8}, 1.13);
 
-    Sphere sphere(Vec3{0, 0, 10}, 1.0f, &metalMat);
-    Sphere sphere2(Vec3{-2.0f, 0, 10}, 1.0f, &dielectricMat);
-    Sphere sphere2_1(Vec3{-2.0f, 0, 10}, 0.9f, &invDielectricMat);
-    Sphere sphere3(Vec3{-4.0f, 0, 10}, 1.0f, &lambertMat2);
-    Cube cube(Vec3{-3.0, -1.0, 6}, Vec3{2, 2 ,2}, &dielectricMat2);
+    Sphere sphere(Ray{Vec3{0, 0, 10}, Vec3{0, -1, 0}}, 1.0f, &metalMat);
+    Sphere sphere2(Ray{Vec3{-2.0f, 0, 10}, Vec3{0, -1, 0}}, 1.0f, &dielectricMat);
+    Sphere sphere2_1(Ray{Vec3{-2.0f, 0, 10}, Vec3{0, -1, 0}}, 0.9f, &invDielectricMat);
+    Sphere sphere3(Ray{Vec3{-4.0f, 0, 10}, Vec3{0, -1, 0}}, 1.0f, &lambertMat2);
+    Cube cube(Ray{Vec3{-3.0, -1.0, 6}, Vec3{0, 0, 0}}, Vec3{2, 2 ,2}, &dielectricMat2);
     Plane floor(Vec3{0, -1, 0}, Vec3{0, 1, 0}, &lambertMat);
-    WireFrame wire(Vec3{-3.0, -1.0, 9}, Vec3{2, 2, 2}, &greenGlowMat);
+    WireFrame wire(Ray{Vec3{-3.0, -1.0, 9}, Vec3{0, -1, 0}}, Vec3{2, 2, 2}, &greenGlowMat);
     Hittables hittables(&skyMat);
     hittables.add(&sphere);
     hittables.add(&sphere2);
