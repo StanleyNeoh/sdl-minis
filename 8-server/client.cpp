@@ -1,49 +1,84 @@
-#include <string>
-#include <cstdint>
-#include <cstring>
+#include <cerrno>
+#include <charconv>
 #include <iostream>
-#include <arpa/inet.h>
-#include <sys/types.h>
+#include <string>
+#include <string_view>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include "serialize.hpp"
 #include "utils.hpp"
 
-void list_rooms(std::string& out) {
-    out.clear();
-    append_i32(out, static_cast<int>(Ops::ListRooms));
+std::string_view trim_leading_spaces(std::string_view text) {
+    std::size_t start = 0;
+    while (start < text.size() && text[start] == ' ') {
+        ++start;
+    }
+
+    return text.substr(start);
 }
 
-void create_room(std::string& out, const std::string& roomname) {
-    out.clear();
-    append_i32(out, static_cast<int>(Ops::CreateRoom));
-    append_i32(out, static_cast<int>(roomname.size()));
-    out += roomname;
-}
+bool parse_room_id(std::string_view args, int& room_id) {
+    args = trim_leading_spaces(args);
 
-bool parse_command(const std::string& buffer, std::string& out) {
-    if (buffer.empty()) {
+    if (args.empty()) {
         return false;
     }
 
-    if (buffer[0] == '3') {
-        list_rooms(out);
-        return true;
-    } else if (buffer[0] == '4') {
-        std::string roomname;
-        for (std::size_t i = 1; i < buffer.size(); ++i) {
-            if (buffer[i] != ' ') {
-                roomname = std::string(buffer.data() + i);
-                break;
-            }
+    const char* begin = args.data();
+    const char* end = args.data() + args.size();
+    auto [ptr, ec] = std::from_chars(begin, end, room_id);
+    return ec == std::errc() && ptr == end;
+}
+
+bool send_command(int clientSocket, const std::string& buffer) {
+    std::string_view input = trim_leading_spaces(buffer);
+    if (input.empty()) {
+        return false;
+    }
+
+    std::size_t split = input.find(' ');
+    std::string_view command = input.substr(0, split);
+    std::string_view args = split == std::string_view::npos ? std::string_view{} : input.substr(split + 1);
+
+    if (command == "join") {
+        int room_id = 0;
+        if (!parse_room_id(args, room_id)) {
+            return false;
         }
+
+        JoinBody body{room_id};
+        return send_body(clientSocket, body);
+    } else if (command == "leave") {
+        int room_id = 0;
+        if (!parse_room_id(args, room_id)) {
+            return false;
+        }
+
+        LeaveBody body{room_id};
+        return send_body(clientSocket, body);
+    } else if (command == "members") {
+        int room_id = 0;
+        if (!parse_room_id(args, room_id)) {
+            return false;
+        }
+
+        ListRoomMembersBody body{room_id};
+        return send_body(clientSocket, body);
+    } else if (command == "list") {
+        if (!trim_leading_spaces(args).empty()) {
+            return false;
+        }
+        return send_body(clientSocket, ListRoomsBody{});
+    } else if (command == "create") {
+        std::string roomname(trim_leading_spaces(args));
 
         if (roomname.empty()) {
             return false;
         }
 
-        create_room(out, roomname);
-        return true;
+        CreateRoomBody body{roomname};
+        return send_body(clientSocket, body);
     }
 
     return false;
@@ -51,26 +86,14 @@ bool parse_command(const std::string& buffer, std::string& out) {
 
 bool read_response(int clientSocket) {
     int opcode = 0;
-    if (!recv_i32(clientSocket, opcode)) {
-        return false;
-    }
+    if (!recv_i32(clientSocket, opcode)) return false;
 
-    if (opcode == static_cast<int>(Ops::ListRooms)) {
-        int body_size = 0;
-        std::string body;
-        if (!recv_i32(clientSocket, body_size) || !recv_string(clientSocket, body_size, body)) {
+    if (opcode == static_cast<int>(Ops::ServerMessage)) {
+        ServerMessageBody body;
+        if (!body.recv(clientSocket)) {
             return false;
         }
-        std::cout << "Rooms: " << body << "\n";
-        return true;
-    }
-
-    if (opcode == static_cast<int>(Ops::CreateRoom)) {
-        int room_id = 0;
-        if (!recv_i32(clientSocket, room_id)) {
-            return false;
-        }
-        std::cout << "Room ID: " << room_id << "\n";
+        std::cout << body.msg << "\n";
         return true;
     }
 
@@ -93,16 +116,10 @@ int main() {
     };
 
     std::string buffer;
-    std::string out;
     while (std::getline(std::cin, buffer)) {
-        if (!parse_command(buffer, out)) {
-            std::cout << "Supported commands: 3, 4 <room name>\n";
+        if (!send_command(clientSocket, buffer)) {
+            std::cout << "Supported commands: join <room id>, leave <room id>, members <room id>, list, create <room name>\n";
             continue;
-        }
-
-        if (!send_exact(clientSocket, out.data(), out.size())) {
-            std::cerr << "Failed to send request\n";
-            break;
         }
 
         if (!read_response(clientSocket)) {
