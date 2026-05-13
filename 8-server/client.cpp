@@ -10,106 +10,8 @@
 #include "serialize.hpp"
 #include "utils.hpp"
 
-int current_room = -1;
 
-bool parse_room_id(std::string_view args, int& room_id) {
-    args = trim_leading_spaces(args);
-
-    if (args.empty()) {
-        return false;
-    }
-
-    const char* begin = args.data();
-    const char* end = args.data() + args.size();
-    auto [ptr, ec] = std::from_chars(begin, end, room_id);
-    return ec == std::errc() && ptr == end;
-}
-
-bool send_command(int clientSocket, const std::string& buffer) {
-    std::string_view input = trim_leading_spaces(buffer);
-    if (input.empty()) {
-        return false;
-    }
-
-    std::size_t split = input.find(' ');
-    std::string_view command = input.substr(0, split);
-    std::string_view args = split == std::string_view::npos ? std::string_view{} : input.substr(split + 1);
-
-    if (command == "reg") {
-        int room_id = 0;
-        if (!parse_room_id(args, room_id)) {
-            return false;
-        }
-
-        JoinBody body{room_id};
-        return send_body(clientSocket, body);
-    } else if (command == "join") {
-        int room_id = 0;
-        if (!parse_room_id(args, room_id)) {
-            return false;
-        }
-        current_room = room_id;
-        std::cout << "Joined " << current_room << "\n";
-        return true;
-    } else if (command == "leave") {
-        int room_id = 0;
-        if (!parse_room_id(args, room_id)) {
-            return false;
-        }
-
-        LeaveBody body{room_id};
-        return send_body(clientSocket, body);
-    } else if (command == "members") {
-        int room_id = 0;
-        if (!parse_room_id(args, room_id)) {
-            return false;
-        }
-
-        ListRoomMembersBody body{room_id};
-        return send_body(clientSocket, body);
-    } else if (command == "list") {
-        if (!trim_leading_spaces(args).empty()) {
-            return false;
-        }
-        return send_body(clientSocket, ListRoomsBody{});
-    } else if (command == "create") {
-        std::string roomname(trim_leading_spaces(args));
-
-        if (roomname.empty()) {
-            return false;
-        }
-
-        CreateRoomBody body{roomname};
-        return send_body(clientSocket, body);
-    } else {
-        if (current_room < 0) {
-            return false;
-        }
-
-        RoomMessageBody body{current_room, std::string(input)};
-        return send_body(clientSocket, body);
-    }
-
-    return false;
-}
-
-void recv_handler(int clientSocket) {
-    Body body;
-    while (true) {
-        if (!recv_body(clientSocket, body)) {
-            std::cout << "Failed to receive body\n";
-            break;
-        }
-
-        switch(body.ops) {
-        case Ops::ServerMessage: {
-            std::cout << body.server_msg.msg << "\n";
-            continue;
-        }
-        }
-        break;
-    }
-}
+std::string curr_room;
 
 bool find_servers(sockaddr_in& serverAddress, int gateway_port) {
     int clientSocket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -141,6 +43,69 @@ bool find_servers(sockaddr_in& serverAddress, int gateway_port) {
     return true;
 }
 
+void recv_thread(int clientSocket) {
+    while (true) {
+        int opscode;
+        if (!recv_i32(clientSocket, opscode)) {
+            std::cout << "Failed to receive body\n";
+            break;
+        }
+        Ops ops = static_cast<Ops>(opscode);
+        switch(ops) {
+            case Ops::ServerMessage: {
+                ServerMessageBody body;
+                body.recv(clientSocket);
+                std::cout << "[Server] " << body.msg << "\n";
+                continue;
+            }
+            case Ops::JoinResp: {
+                JoinResp body;
+                body.recv(clientSocket);
+                curr_room = body.roomname;
+                std::cout << "[Join Response] Joined " << body.roomname << " " << (body.success ? "Success" : "Failed") << "\n";
+                continue;
+            }
+            case Ops::LeaveResp: {
+                LeaveResp body;
+                body.recv(clientSocket);
+                curr_room.clear();
+                std::cout << "[Leave Response] Left " << body.roomname << " " << (body.success ? "Success" : "Failed") << "\n";
+                continue;
+            }
+            case Ops::ListRoomMembersResp: {
+                ListRoomMembersResp body;
+                body.recv(clientSocket);
+                std::cout << "Members:\n";
+                for (auto& p: body.members) {
+                    std::cout << " - " << p.name << "(" << p.address << " / " << p.fd << ")\n";
+                }
+                std::cout << "\n";
+            }
+            case Ops::ListRoomsResp: {
+                ListRoomsResp body;
+                body.recv(clientSocket);
+                std::cout << "Rooms:\n";
+                for (auto& p: body.rooms) {
+                    std::cout << " - " << p << "\n";
+                }
+                std::cout << "\n";
+            }
+            case Ops::CreateRoomResp: {
+                CreateRoomResp body;
+                body.recv(clientSocket);
+                std::cout << "[Create Room Response] " << body.room_name << " creation " << (body.success ? "success" : "failed") << "\n";
+            }
+            case Ops::RoomMessageResp: {
+                RoomMessageResp body;
+                body.recv(clientSocket);
+                std::cout << body.user << " === " << body.msg << "\n";
+            }
+        }
+        break;
+    }
+}
+
+
 int main() {
     int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (clientSocket < 0) {
@@ -148,7 +113,6 @@ int main() {
         return 1;
     }
 
-    std::cout << "Finding servers with gateway port 12345\n";
     sockaddr_in serverAddress; 
     if (!find_servers(serverAddress, 12345)) {
         std::cerr << "Unable to find server\n";
@@ -162,16 +126,59 @@ int main() {
         return 1;
     };
 
-    std::thread _recv_handler(recv_handler, clientSocket);
-    _recv_handler.detach();
+    std::thread _recv_thread(recv_thread, clientSocket);
+    _recv_thread.detach();
 
     std::string buffer;
-    Body resp_body;
     while (std::getline(std::cin, buffer)) {
-        if (!send_command(clientSocket, buffer)) {
-            std::cout << "Supported commands: join <room id>, leave <room id>, members <room id>, list, create <room name>\n";
-            continue;
+        std::string_view command;
+        std::string_view rest;
+        if (parse_command(buffer, command, rest)) {
+            if (command == "/join") {
+                std::string_view roomname;
+                if (parse_args(rest, roomname) == 1) {
+                    JoinBody body {std::string(roomname)};
+                    send_body(clientSocket, body);
+                } else {
+                    std::cout << "Help: /join <room_name>\n";
+                }
+            } else if (command == "/leave") {
+                std::string_view roomname;
+                if (parse_args(rest, roomname) == 1) {
+                    LeaveBody body{std::string(roomname)};
+                    return send_body(clientSocket, body);
+                } else {
+                    std::cout << "Help: /leave <room_name>\n";
+                }
+            } else if (command == "/members") {
+                std::string_view roomname;
+                if (parse_args(rest, roomname) == 1) {
+                    int room_id = 0;
+                    ListRoomMembersBody body{std::string(roomname)};
+                    send_body(clientSocket, body);
+                } else {
+                    std::cout << "Help: /members <room_id>\n";
+                }
+            } else if (command == "/list") {
+                send_body(clientSocket, ListRoomsBody{});
+            } else if (command == "/create") {
+                std::string_view roomname;
+                if (parse_args(rest, roomname) == 1) {
+                    CreateRoomBody body{std::string(roomname)};
+                    send_body(clientSocket, body);
+                } else {
+                    std::cout << "Help: /create <room_id>\n";
+                }
+            }
+        } else {
+            if (curr_room.empty()) {
+                std::cout << "[Error] Not in any room.\n";
+            } else {
+                RoomMessageBody body{curr_room, std::string(buffer)};
+                send_body(clientSocket, body);
+            }
         }
+        return false;
     }
 
     close(clientSocket);

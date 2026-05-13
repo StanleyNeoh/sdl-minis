@@ -1,6 +1,7 @@
 #ifndef SERIALIZE_HPP
 #define SERIALIZE_HPP
 
+#include <vector>
 #include "utils.hpp"
 #include "network.hpp"
 
@@ -8,11 +9,17 @@ enum struct Ops: int {
     Uninitialized,
     ServerMessage,
     Join,
+    JoinResp,
     Leave,
+    LeaveResp,
     ListRooms,
+    ListRoomsResp,
     ListRoomMembers,
+    ListRoomMembersResp,
     CreateRoom,
+    CreateRoomResp,
     RoomMessage,
+    RoomMessageResp,
 };
 
 struct ServerMessageBody {
@@ -20,40 +27,70 @@ struct ServerMessageBody {
     std::string msg;
 
     bool send(int socket) const {
-        return send_i32(socket, msg.size())
-            && send_exact(socket, msg.data(), msg.size());
+        return send_string(socket, msg);
     }
 
     bool recv(int socket) {
-        int ssize = 0;
-        return recv_i32(socket, ssize)
-            && recv_string(socket, ssize, msg);
+        return recv_string(socket, msg);
+
     }
 };
 
 struct JoinBody {
     static constexpr Ops ops = Ops::Join;
-    int room_id;
+    std::string roomname;
 
     bool send(int socket) const {
-        return send_i32(socket, room_id);
+        return send_string(socket, roomname);
     }
 
     bool recv(int socket) {
-        return recv_i32(socket, room_id);
+        return recv_string(socket, roomname);
+    }
+};
+
+struct JoinResp {
+    static constexpr Ops ops = Ops::JoinResp;
+    std::string roomname;
+    int success;
+
+    bool send(int socket) const {
+        return send_string(socket, roomname)
+            && send_i32(socket, success);
+    }
+
+    bool recv(int socket) {
+        return recv_string(socket, roomname)
+            && recv_i32(socket, success);
     }
 };
 
 struct LeaveBody {
     static constexpr Ops ops = Ops::Leave;
-    int room_id;
+    std::string roomname;
 
     bool send(int socket) const {
-        return send_i32(socket, room_id);
+        return send_string(socket, roomname);
     }
 
     bool recv(int socket) {
-        return recv_i32(socket, room_id);
+        return recv_string(socket, roomname);
+    }
+};
+
+struct LeaveResp {
+    static constexpr Ops ops = Ops::LeaveResp;
+    std::string roomname;
+    int success;
+
+    bool send(int socket) const {
+        return send_string(socket, roomname)
+            && send_i32(socket, success);
+    }
+
+    bool recv(int socket) {
+        return recv_string(socket, roomname)
+            && recv_i32(socket, success);
     }
 };
 
@@ -63,16 +100,119 @@ struct ListRoomsBody {
     bool recv(int socket) { return true; }
 };
 
-struct ListRoomMembersBody {
-    static constexpr Ops ops = Ops::ListRoomMembers;
-    int room_id;
+struct ListRoomsResp {
+    static constexpr Ops ops = Ops::ListRoomsResp;
 
-    bool send(int socket) const { 
-        return send_i32(socket, room_id);
+    struct Room {
+        std::string name;
+        int num_members;
+
+        Room() = default;
+        Room(std::string_view name, int num_members): name(name), num_members(num_members) {}
+
+        bool send(int socket) {
+            return send_i32(socket, name.size())
+                && send_exact(socket, name.data(), name.size())
+                && send_i32(socket, num_members);
+        }
+
+        bool recv(int socket) {
+            int namelen = 0;
+            return recv_i32(socket, namelen)
+                && recv_string(socket, name)
+                && recv_i32(socket, num_members);
+        }
+
+        friend std::ostream& operator<<(std::ostream& o, const Room& room) {
+            o << room.name << "(" << room.num_members << ")";
+            return o;
+        }
+    };
+
+    std::vector<Room> rooms;
+
+    bool send(int socket) {
+        if (!send_i32(socket, rooms.size())) return false;
+        for (auto& room: rooms) {
+            if (!room.send(socket)) return false;
+        }
+        return true;
     }
 
     bool recv(int socket) {
-        return recv_i32(socket, room_id);
+        int nitems = 0;
+        if (!recv_i32(socket, nitems)) return false;
+        for (int i = 0; i < nitems; i++) {
+            Room room;
+            if (!room.recv(socket)) return false;
+            rooms.push_back(std::move(room));
+        }
+        return true;
+    }
+};
+
+struct ListRoomMembersBody {
+    static constexpr Ops ops = Ops::ListRoomMembers;
+    std::string roomname;
+
+    bool send(int socket) const { 
+        return send_string(socket, roomname);
+    }
+
+    bool recv(int socket) {
+        return recv_string(socket, roomname);
+    }
+};
+
+struct User {
+    std::string name;
+    std::string address;
+    int fd;
+
+    User() = default;
+    User(const std::string& address, int fd): name(address), address(address), fd(fd) {}
+
+    bool send(int socket) const {
+        return send_string(socket, name)
+        && send_string(socket, address)
+        && send_i32(socket, fd);
+    }
+
+    bool recv(int socket) {
+        return recv_string(socket, name)
+        && recv_string(socket, address)
+        && recv_i32(socket, fd);
+    }
+
+    friend std::ostream& operator<<(std::ostream& o, const User& conn) {
+        o << "(" << conn.name << "/" << conn.address << "/" << conn.fd << ")";
+        return o;
+    }
+};
+
+struct ListRoomMembersResp {
+    static constexpr Ops ops = Ops::ListRoomMembersResp;
+    std::vector<User> members;
+
+    ListRoomMembersResp() = default;
+
+    bool send(int socket) const {
+        if (!send_i32(socket, members.size())) return false;
+        for (auto& member: members) {
+            if (!member.send(socket)) return false;
+        }
+        return true;
+    }
+
+    bool recv(int socket) {
+        int nitems = 0;
+        if (!recv_i32(socket, nitems)) return false; 
+        for (int i = 0; i < nitems; i++) {
+            User member;
+            if (!member.recv(socket)) return false;
+            members.push_back(std::move(member));
+        }
+        return true;
     }
 };
 
@@ -81,112 +221,70 @@ struct CreateRoomBody {
     std::string room_name;
 
     bool send(int socket) const {
-        return send_i32(socket, room_name.size()) 
-            && send_exact(socket, room_name.data(), room_name.size());
+        return send_string(socket, room_name);
     }
 
     bool recv(int socket) {
-        int ssize = 0;
-        return recv_i32(socket, ssize)
-            && recv_string(socket, ssize, room_name);
+        return recv_string(socket, room_name);
+    }
+};
+
+struct CreateRoomResp {
+    static constexpr Ops ops = Ops::CreateRoom;
+    std::string room_name;
+    int success;
+
+    bool send(int socket) const {
+        return send_string(socket, room_name)
+            && send_i32(socket, success);
+    }
+
+    bool recv(int socket) {
+        return recv_string(socket, room_name)
+            && recv_i32(socket, success);
     }
 };
 
 struct RoomMessageBody {
     static constexpr Ops ops = Ops::RoomMessage;
-    int room_id;
+    std::string room_name;
     std::string msg;
 
     bool send(int socket) const {
-        return send_i32(socket, room_id)
-            && send_i32(socket, msg.size())
-            && send_exact(socket, msg.data(), msg.size());
+        return send_string(socket, room_name)
+            && send_string(socket, msg);
+    }
+
+    bool recv(int socket) {
+        return recv_string(socket, room_name)
+            && recv_string(socket, msg);
+    }
+};
+
+struct RoomMessageResp {
+    static constexpr Ops ops = Ops::RoomMessageResp;
+    User user;
+    std::string msg;
+
+    RoomMessageResp() = default;
+    RoomMessageResp(const User& user, std::string_view msg): user(user), msg(msg) {}
+
+    bool send(int socket) const {
+        return user.send(socket)
+            && send_string(socket, msg);
     }
 
     bool recv(int socket) {
         int ssize = 0;
-        return recv_i32(socket, room_id)
-            && recv_i32(socket, ssize)
-            && recv_string(socket, ssize, msg);
+        return user.recv(socket)
+            && recv_string(socket, msg);
     }
 };
-
-struct Body {
-    Ops ops;
-    union {
-        ServerMessageBody server_msg;
-        JoinBody join_body;
-        LeaveBody leave_body;
-        ListRoomsBody list_rooms_body;
-        ListRoomMembersBody list_room_members_body;
-        CreateRoomBody create_room_body;
-        RoomMessageBody room_msg_body;
-    };
-
-    Body(): ops(Ops::Uninitialized) {}
-
-    ~Body() { destroy(); }
-
-    void destroy() {
-        switch (ops) {
-        case Ops::ServerMessage:
-            server_msg.~ServerMessageBody();
-            break;
-        case Ops::Join:
-            join_body.~JoinBody();
-            break;
-        case Ops::Leave:
-            leave_body.~LeaveBody();
-            break;
-        case Ops::ListRooms:
-            list_rooms_body.~ListRoomsBody();
-            break;
-        case Ops::ListRoomMembers:
-            list_room_members_body.~ListRoomMembersBody();
-            break;
-        case Ops::CreateRoom:
-            create_room_body.~CreateRoomBody();
-            break;
-        }
-    }
-
-    template <typename T>
-    T& emplace() {
-        destroy();
-        ops = T::ops;
-        return *new (&server_msg) T();
-    }
-};
-
 
 template <typename T>
 bool send_body(int socket, const T& body) {
     return send_i32(socket, static_cast<int>(T::ops))
         && body.send(socket);
-}
-
-bool recv_body(int socket, Body& body) {
-    int opscode;
-    if (!recv_i32(socket, opscode)) return false;
-    std::cout << " RECV " << opscode << "\n";
-    switch (opscode) {
-    case static_cast<int>(Ops::ServerMessage):
-        return body.emplace<ServerMessageBody>().recv(socket);
-    case static_cast<int>(Ops::Join):
-        return body.emplace<JoinBody>().recv(socket);
-    case static_cast<int>(Ops::Leave):
-        return body.emplace<LeaveBody>().recv(socket);
-    case static_cast<int>(Ops::ListRooms):
-        return body.emplace<ListRoomsBody>().recv(socket);
-    case static_cast<int>(Ops::ListRoomMembers):
-        return body.emplace<ListRoomMembersBody>().recv(socket);
-    case static_cast<int>(Ops::CreateRoom):
-        return body.emplace<CreateRoomBody>().recv(socket);
-    case static_cast<int>(Ops::RoomMessage):
-        return body.emplace<RoomMessageBody>().recv(socket);
-    default:
-        return false;
-    }
 }
 
 #endif

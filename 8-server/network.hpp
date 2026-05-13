@@ -57,14 +57,16 @@ bool send_i32(int socket, int value) {
     return send_exact(socket, &encoded, sizeof(encoded));
 }
 
-bool recv_string(int socket, int size, std::string& out) {
-    if (size < 0) {
-        return false;
-    }
-
-    out.resize(static_cast<std::size_t>(size));
-    return size == 0 || recv_exact(socket, out.data(), static_cast<std::size_t>(size));
+bool send_string(int socket, const std::string& out) {
+    return send_i32(socket, out.size())
+        && send_exact(socket, out.data(), out.size());
 }
 
+bool recv_string(int socket, std::string& out) {
+    int ssize = 0;
+    if (!recv_i32(socket, ssize)) return false;
+    out.resize(ssize);
+    return ssize == 0 || recv_exact(socket, out.data(), ssize);
+}
 
 #endif
