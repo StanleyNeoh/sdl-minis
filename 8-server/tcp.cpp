@@ -163,8 +163,34 @@ bool send_text_response(int clientSocket, const std::string& message) {
     return send_body(clientSocket, body);
 }
 
-int thread_handler(int clientSocket, sockaddr_in clientAddr) {
-    Conn conn(clientSocket, get_client_address(clientAddr));
+int gateway_thread(in_port_t tcp_port, in_port_t gateway_port) {
+    std::cout << "Started gateway thread with tcp_port=" << tcp_port << " and gateway_port=" << gateway_port << "\n";
+    int gatewaySocket = socket(AF_INET, SOCK_DGRAM, 0);
+    sockaddr_in socketAddress = create_address(gateway_port);
+    if (bind(gatewaySocket, reinterpret_cast<const sockaddr*>(&socketAddress), sizeof(socketAddress)) != 0) {
+        std::cerr << "Failed to bind: " << errno << "\n";
+        close(gatewaySocket);
+        return 1;
+    }
+
+    in_port_t _tcp_port = htons(tcp_port);
+    constexpr size_t buf_size = 1024;
+    char buffer[buf_size + 1] = {0};
+    sockaddr_in clientAddr;
+    socklen_t clientAddrSize = sizeof(clientAddr);
+    while (true) {
+        size_t n = recvfrom(gatewaySocket, buffer, buf_size, MSG_TRUNC, reinterpret_cast<sockaddr*>(&clientAddr), &clientAddrSize);
+        if (n <= 0) continue;
+        n = sendto(gatewaySocket, &_tcp_port, sizeof(_tcp_port), 0, reinterpret_cast<sockaddr*>(&clientAddr), clientAddrSize);
+        if (n <= 0) {
+            std::string clientip = get_str_address(clientAddr);
+            std::cout << "Received msg from " << clientip << " but fail to respond.\n";
+        }
+    }
+}
+
+int connection_thread(int clientSocket, sockaddr_in clientAddr) {
+    Conn conn(clientSocket, get_str_address(clientAddr));
     std::cout << "Thread started for " << conn << "\n";
     Body body;
     while (true) {
@@ -243,6 +269,11 @@ int thread_handler(int clientSocket, sockaddr_in clientAddr) {
 }
 
 int main() {
+    constexpr in_port_t gateway_port = 12345;
+    constexpr in_port_t tcp_port = 8080;
+    std::thread _gateway_thread(gateway_thread, 8080, 12345);
+    _gateway_thread.detach();
+
     int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket < 0) {
         std::cerr << "Failed to create socket\n";
@@ -252,7 +283,7 @@ int main() {
     int reuse_addr = 1;
     setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr));
 
-    sockaddr_in socketAddress = create_address();
+    sockaddr_in socketAddress = create_address(tcp_port, INADDR_ANY);
     if (bind(serverSocket, reinterpret_cast<const sockaddr*>(&socketAddress), sizeof(socketAddress)) != 0) {
         std::cerr << "Failed to bind: " << errno << "\n";
         close(serverSocket);
@@ -275,7 +306,7 @@ int main() {
             continue;
         }
 
-        std::thread(thread_handler, clientSocket, clientAddr).detach();
+        std::thread(connection_thread, clientSocket, clientAddr).detach();
         std::cout << "Connection received\n";
     }
 

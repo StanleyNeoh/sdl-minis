@@ -111,6 +111,36 @@ void recv_handler(int clientSocket) {
     }
 }
 
+bool find_servers(sockaddr_in& serverAddress, int gateway_port) {
+    int clientSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (clientSocket < 0) {
+        std::cerr << "Failed to create UDP socket. Errno: " << errno << "\n";
+        return false;
+    }
+
+    {
+        int is_broadcast = 1;
+        if (setsockopt(clientSocket, SOL_SOCKET, SO_BROADCAST, &is_broadcast, sizeof(is_broadcast)) != 0) {
+            std::cerr << "Failed to set sockopt. Errno: " << errno << "\n";
+            close(clientSocket);
+            return false;
+        }
+    }
+
+    {
+        sockaddr_in broadcastAddress = create_address(gateway_port, INADDR_BROADCAST);
+        static std::string_view buffer = "hi";
+        ssize_t n = sendto(clientSocket, &buffer, buffer.size(), 0, reinterpret_cast<sockaddr*>(&broadcastAddress), sizeof(broadcastAddress));
+        std::cout << "Sending UDP n=" << n << " to " << get_str_address(serverAddress) << ". ErrNo: " << errno <<"\n";
+    }
+
+    in_port_t port;
+    socklen_t addressSize = sizeof(serverAddress);
+    ssize_t n = recvfrom(clientSocket, &port, sizeof(port), MSG_TRUNC, reinterpret_cast<sockaddr*>(&serverAddress), &addressSize);
+    serverAddress.sin_port = port; // suppose to store in network order. Not ntohs required
+    return true;
+}
+
 int main() {
     int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (clientSocket < 0) {
@@ -118,7 +148,14 @@ int main() {
         return 1;
     }
 
-    sockaddr_in serverAddress = create_address();
+    std::cout << "Finding servers with gateway port 12345\n";
+    sockaddr_in serverAddress; 
+    if (!find_servers(serverAddress, 12345)) {
+        std::cerr << "Unable to find server\n";
+        return 1;
+    };
+
+    std::cout << "Found server address" << get_str_address(serverAddress) << "\n";
     if (connect(clientSocket, reinterpret_cast<const sockaddr*>(&serverAddress), sizeof(serverAddress)) != 0) {
         std::cerr << "Failed to connect: " << errno << "\n";
         close(clientSocket);
