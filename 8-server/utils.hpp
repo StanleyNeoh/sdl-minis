@@ -3,6 +3,15 @@
 
 #include <arpa/inet.h>
 
+std::string_view trim_leading_spaces(std::string_view text) {
+    std::size_t start = 0;
+    while (start < text.size() && text[start] == ' ') {
+        ++start;
+    }
+
+    return text.substr(start);
+}
+
 sockaddr_in create_address(int16_t port = 8080) {
     sockaddr_in serverAddress{};
     serverAddress.sin_family = AF_INET;

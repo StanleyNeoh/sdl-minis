@@ -1,17 +1,18 @@
 #ifndef SERIALIZE_HPP
 #define SERIALIZE_HPP
 
-#include <new>
-
+#include "utils.hpp"
 #include "network.hpp"
 
 enum struct Ops: int {
+    Uninitialized,
     ServerMessage,
     Join,
     Leave,
     ListRooms,
     ListRoomMembers,
     CreateRoom,
+    RoomMessage,
 };
 
 struct ServerMessageBody {
@@ -91,6 +92,25 @@ struct CreateRoomBody {
     }
 };
 
+struct RoomMessageBody {
+    static constexpr Ops ops = Ops::RoomMessage;
+    int room_id;
+    std::string msg;
+
+    bool send(int socket) const {
+        return send_i32(socket, room_id)
+            && send_i32(socket, msg.size())
+            && send_exact(socket, msg.data(), msg.size());
+    }
+
+    bool recv(int socket) {
+        int ssize = 0;
+        return recv_i32(socket, room_id)
+            && recv_i32(socket, ssize)
+            && recv_string(socket, ssize, msg);
+    }
+};
+
 struct Body {
     Ops ops;
     union {
@@ -100,9 +120,10 @@ struct Body {
         ListRoomsBody list_rooms_body;
         ListRoomMembersBody list_room_members_body;
         CreateRoomBody create_room_body;
+        RoomMessageBody room_msg_body;
     };
 
-    Body(): ops(Ops::ListRooms), list_rooms_body() {}
+    Body(): ops(Ops::Uninitialized) {}
 
     ~Body() { destroy(); }
 
@@ -147,6 +168,7 @@ bool send_body(int socket, const T& body) {
 bool recv_body(int socket, Body& body) {
     int opscode;
     if (!recv_i32(socket, opscode)) return false;
+    std::cout << " RECV " << opscode << "\n";
     switch (opscode) {
     case static_cast<int>(Ops::ServerMessage):
         return body.emplace<ServerMessageBody>().recv(socket);
@@ -160,6 +182,8 @@ bool recv_body(int socket, Body& body) {
         return body.emplace<ListRoomMembersBody>().recv(socket);
     case static_cast<int>(Ops::CreateRoom):
         return body.emplace<CreateRoomBody>().recv(socket);
+    case static_cast<int>(Ops::RoomMessage):
+        return body.emplace<RoomMessageBody>().recv(socket);
     default:
         return false;
     }

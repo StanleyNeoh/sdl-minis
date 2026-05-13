@@ -1,4 +1,5 @@
 #include <cerrno>
+#include <thread>
 #include <charconv>
 #include <iostream>
 #include <string>
@@ -9,14 +10,7 @@
 #include "serialize.hpp"
 #include "utils.hpp"
 
-std::string_view trim_leading_spaces(std::string_view text) {
-    std::size_t start = 0;
-    while (start < text.size() && text[start] == ' ') {
-        ++start;
-    }
-
-    return text.substr(start);
-}
+int current_room = -1;
 
 bool parse_room_id(std::string_view args, int& room_id) {
     args = trim_leading_spaces(args);
@@ -41,7 +35,7 @@ bool send_command(int clientSocket, const std::string& buffer) {
     std::string_view command = input.substr(0, split);
     std::string_view args = split == std::string_view::npos ? std::string_view{} : input.substr(split + 1);
 
-    if (command == "join") {
+    if (command == "reg") {
         int room_id = 0;
         if (!parse_room_id(args, room_id)) {
             return false;
@@ -49,6 +43,14 @@ bool send_command(int clientSocket, const std::string& buffer) {
 
         JoinBody body{room_id};
         return send_body(clientSocket, body);
+    } else if (command == "join") {
+        int room_id = 0;
+        if (!parse_room_id(args, room_id)) {
+            return false;
+        }
+        current_room = room_id;
+        std::cout << "Joined " << current_room << "\n";
+        return true;
     } else if (command == "leave") {
         int room_id = 0;
         if (!parse_room_id(args, room_id)) {
@@ -79,26 +81,34 @@ bool send_command(int clientSocket, const std::string& buffer) {
 
         CreateRoomBody body{roomname};
         return send_body(clientSocket, body);
+    } else {
+        if (current_room < 0) {
+            return false;
+        }
+
+        RoomMessageBody body{current_room, std::string(input)};
+        return send_body(clientSocket, body);
     }
 
     return false;
 }
 
-bool read_response(int clientSocket) {
-    int opcode = 0;
-    if (!recv_i32(clientSocket, opcode)) return false;
-
-    if (opcode == static_cast<int>(Ops::ServerMessage)) {
-        ServerMessageBody body;
-        if (!body.recv(clientSocket)) {
-            return false;
+void recv_handler(int clientSocket) {
+    Body body;
+    while (true) {
+        if (!recv_body(clientSocket, body)) {
+            std::cout << "Failed to receive body\n";
+            break;
         }
-        std::cout << body.msg << "\n";
-        return true;
-    }
 
-    std::cerr << "Unknown opcode: " << opcode << "\n";
-    return false;
+        switch(body.ops) {
+        case Ops::ServerMessage: {
+            std::cout << body.server_msg.msg << "\n";
+            continue;
+        }
+        }
+        break;
+    }
 }
 
 int main() {
@@ -115,16 +125,15 @@ int main() {
         return 1;
     };
 
+    std::thread _recv_handler(recv_handler, clientSocket);
+    _recv_handler.detach();
+
     std::string buffer;
+    Body resp_body;
     while (std::getline(std::cin, buffer)) {
         if (!send_command(clientSocket, buffer)) {
             std::cout << "Supported commands: join <room id>, leave <room id>, members <room id>, list, create <room name>\n";
             continue;
-        }
-
-        if (!read_response(clientSocket)) {
-            std::cerr << "Failed to read response\n";
-            break;
         }
     }
 

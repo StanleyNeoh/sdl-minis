@@ -13,11 +13,6 @@
 #include "utils.hpp"
 #include "serialize.hpp"
 
-struct Message {
-    int conn_id;
-    std::string msg;
-};
-
 struct Conn {
     int conn_socket;
     std::string client_address;
@@ -29,12 +24,13 @@ struct Conn {
         return o;
     }
 };
+
 struct Room {
     std::string roomname;
     std::shared_mutex conns_mut;
     std::vector<Conn> conns;
 
-    Room(const std::string roomname): roomname(roomname) {}
+    Room(std::string_view roomname): roomname(roomname) {}
 
     bool add_conn(const Conn& conn) {
         {
@@ -74,6 +70,18 @@ struct Room {
         }
         return body;
     }
+
+
+    bool broadcast_msg(const Conn& conn, std::string_view msg) {
+        ServerMessageBody msgBody;
+        msgBody.msg = conn.client_address + "@" + roomname + ": " + std::string(msg);
+        for (auto& _conn: conns) {
+            if (!msgBody.send(_conn.conn_socket)) {
+                return false;
+            };
+        }
+        return true;
+    }
 };
 
 struct Rooms {
@@ -110,7 +118,7 @@ struct Rooms {
         return rooms[room_id]->remove_conn(conn);
     }
 
-    int create_room(const std::string& roomname) {
+    int create_room(std::string_view roomname) {
         std::unique_lock _lock(rooms_mut);
         int room_id = static_cast<int>(rooms.size());
         rooms.push_back(std::make_unique<Room>(roomname));
@@ -126,6 +134,25 @@ struct Rooms {
         roomname += rooms[static_cast<std::size_t>(room_id)]->roomname;
         return true;
     }
+
+    bool broadcast_msg(int room_id, const Conn& conn, std::string_view msg) {
+        ServerMessageBody msgBody;
+        Room* room = nullptr;
+        {
+            std::shared_lock _lock(rooms_mut);
+            room = rooms[room_id].get();
+        }
+        {
+            std::shared_lock _lock(room->conns_mut);
+            msgBody.msg = conn.client_address + "@" + room->roomname + ": " + std::string(msg);
+            for (auto& _conn: room->conns) {
+                if (!send_body(_conn.conn_socket, msgBody)) {
+                    return false;
+                };
+            }
+            return true;
+        }
+    }
 };
 
 Rooms rooms;
@@ -139,24 +166,17 @@ bool send_text_response(int clientSocket, const std::string& message) {
 int thread_handler(int clientSocket, sockaddr_in clientAddr) {
     Conn conn(clientSocket, get_client_address(clientAddr));
     std::cout << "Thread started for " << conn << "\n";
+    Body body;
     while (true) {
-        Body body;
         if (!recv_body(clientSocket, body)) {
             std::cout << "Failed to receive body\n";
             break;
         }
 
         switch (body.ops) {
-        case Ops::ServerMessage:
-            std::cout << "Unexpected server message from " << conn << ": "
-                      << body.server_msg.msg << "\n";
-            if (!send_text_response(clientSocket, "Unexpected message type")) {
-                break;
-            }
-            continue;
         case Ops::Join: {
             int room_id = body.join_body.room_id;
-            std::string response = "Joined room ";
+            std::string response = "Registered room ";
             if (!rooms.room_name_for_id(room_id, response)) {
                 std::cout << "Invalid room id " << room_id << " from " << conn << "\n";
                 if (!send_text_response(clientSocket, "Invalid room")) break;
@@ -202,14 +222,19 @@ int thread_handler(int clientSocket, sockaddr_in clientAddr) {
             continue;
         }
         case Ops::CreateRoom: {
-            const std::string& room_name = body.create_room_body.room_name;
+            std::string_view room_name = body.create_room_body.room_name;
             int room_id = rooms.create_room(room_name);
-            std::string response = "Created room " + room_name + " with id " + std::to_string(room_id);
+            std::string response = "Created room " + std::string(room_name) + " with id " + std::to_string(room_id);
             if (!send_text_response(clientSocket, response)) break;
             continue;
         }
+        case Ops::RoomMessage: {
+            int room_id = body.room_msg_body.room_id;
+            std::string_view msg = body.room_msg_body.msg;
+            rooms.broadcast_msg(body.room_msg_body.room_id, conn, body.room_msg_body.msg);
+            continue;
         }
-
+        }
         break;
     }
     close(clientSocket);
