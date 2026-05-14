@@ -109,6 +109,12 @@ void recv_thread(int clientSocket) {
                 std::cout << body.user << " === " << body.msg << "\n";
                 continue;
             }
+            case Ops::SetNameResp: {
+                SetNameResp body;
+                if (!body.recv(clientSocket)) break;
+                std::cout << "[Set Name Response] Name set to " << body.name << " is " << (body.success ? "successful" : "not successful") << "\n";
+                continue;
+            }
         }
         break;
     }
@@ -179,6 +185,14 @@ int main() {
                     send_body(clientSocket, body);
                 } else {
                     std::cout << "Help: /create <room_id>\n";
+                }
+            } else if (command == "iam") {
+                std::string_view name;
+                if (parse_args(rest, name) == 1) {
+                    SetNameBody body{std::string(name)};
+                    send_body(clientSocket, body);
+                } else {
+                    std::cout << "Help: /iam <name>\n";
                 }
             }
         } else {

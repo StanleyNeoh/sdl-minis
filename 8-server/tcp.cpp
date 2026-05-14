@@ -274,6 +274,14 @@ int connection_thread(int clientSocket, sockaddr_in clientAddr) {
                 if (!send_body(clientSocket, resp)) break;
                 continue;
             }
+            case Ops::SetName: {
+                SetNameBody body;
+                if (!body.recv(clientSocket)) break;
+                SetNameResp resp{.name = body.name};
+                resp.success = center.rename_user(clientSocket, body.name);
+                if (!send_body(clientSocket, resp)) break;
+                continue;
+            }
             default:
                 break;
         }
