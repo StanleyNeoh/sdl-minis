@@ -110,16 +110,13 @@ struct ListRoomsResp {
         Room() = default;
         Room(std::string_view name, int num_members): name(name), num_members(num_members) {}
 
-        bool send(int socket) {
-            return send_i32(socket, name.size())
-                && send_exact(socket, name.data(), name.size())
+        bool send(int socket) const {
+            return send_string(socket, name)
                 && send_i32(socket, num_members);
         }
 
         bool recv(int socket) {
-            int namelen = 0;
-            return recv_i32(socket, namelen)
-                && recv_string(socket, name)
+            return recv_string(socket, name)
                 && recv_i32(socket, num_members);
         }
 
@@ -131,7 +128,7 @@ struct ListRoomsResp {
 
     std::vector<Room> rooms;
 
-    bool send(int socket) {
+    bool send(int socket) const {
         if (!send_i32(socket, rooms.size())) return false;
         for (auto& room: rooms) {
             if (!room.send(socket)) return false;
@@ -230,7 +227,7 @@ struct CreateRoomBody {
 };
 
 struct CreateRoomResp {
-    static constexpr Ops ops = Ops::CreateRoom;
+    static constexpr Ops ops = Ops::CreateRoomResp;
     std::string room_name;
     int success;
 

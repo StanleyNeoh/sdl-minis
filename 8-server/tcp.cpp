@@ -91,14 +91,14 @@ struct Room {
     bool broadcast_msg(const User& user, std::string_view msg) {
         RoomMessageResp body(user, msg);
         for (int p: room_users) {
-            if (!body.send(p)) return false;;
+            if (!send_body(p, body)) return false;;
         }
         return true;
     }
 
     int get_num_members() {
         std::shared_lock lock(users_mut);
-        return users.size();
+        return room_users.size();
     }
 };
 
@@ -151,7 +151,7 @@ struct Rooms {
 
     bool broadcast_msg(std::string& roomname, const User& user, std::string_view msg) {
         std::shared_lock _lock(rooms_mut);
-        if (rooms.find(roomname) != rooms.end()) {
+        if (rooms.find(roomname) == rooms.end()) {
             return false;
         }
         return rooms[roomname]->broadcast_msg(user, msg);
@@ -194,56 +194,58 @@ int connection_thread(int clientSocket, sockaddr_in clientAddr) {
         return -1;
     };
 
-    std::cout << "Thread started for " << address << "\n";
+    std::cout << "Thread started for " << users.get(clientSocket) << "\n";
+
     while (true) {
         int opscode;
         if (!recv_i32(clientSocket, opscode)) {
             std::cout << "Failed to receive body\n";
-            continue;
+            break;
         }
         Ops ops = static_cast<Ops>(opscode);
         switch (ops) {
             case Ops::Join: {
                 JoinBody body;
-                body.recv(clientSocket);
+                if (!body.recv(clientSocket)) break;
                 bool success = rooms.join_room(clientSocket, body.roomname);
                 JoinResp resp{body.roomname, success};
-                resp.send(clientSocket);
+                if (!send_body(clientSocket, resp)) break;
                 continue;
             }
             case Ops::Leave: {
                 LeaveBody body;
-                body.recv(clientSocket);
+                if (!body.recv(clientSocket)) break;
                 bool success = rooms.leave_room(clientSocket, body.roomname);
                 LeaveResp resp{body.roomname, success};
-                resp.send(clientSocket);
+                if (!send_body(clientSocket, resp)) break;
                 continue;
             }
             case Ops::ListRoomMembers: {
                 ListRoomMembersBody body;
-                body.recv(clientSocket);
+                if (!body.recv(clientSocket)) break;
                 ListRoomMembersResp resp = rooms.list_room_members(body.roomname);
-                resp.send(clientSocket);
+                if (!send_body(clientSocket, resp)) break;
                 continue;
             }
             case Ops::ListRooms: {
                 ListRoomsBody body;
-                body.recv(clientSocket);
+                if (!body.recv(clientSocket)) break;
                 ListRoomsResp resp = rooms.list_rooms();
-                resp.send(clientSocket);
+                if (!send_body(clientSocket, resp)) break;
                 continue;
             }
             case Ops::CreateRoom: {
                 CreateRoomBody body;
-                body.recv(clientSocket);
+                if (!body.recv(clientSocket)) break;
                 bool success = rooms.create_room(body.room_name);
+                std::cout << "Created room " << success << "\n";
                 CreateRoomResp resp{body.room_name, success};
-                resp.send(clientSocket);
+                if (!send_body(clientSocket, resp)) break;
                 continue;
             }
             case Ops::RoomMessage: {
                 RoomMessageBody body;
-                body.recv(clientSocket);
+                if (!body.recv(clientSocket)) break;
                 rooms.broadcast_msg(body.room_name, users.get(clientSocket), body.msg);
                 continue;
             }
@@ -282,7 +284,7 @@ int main() {
         close(serverSocket);
         return -1;
     }
-    std::cout << "Listening for userections\n";
+    std::cout << "Listening for connections\n";
 
     while (true) {
         sockaddr_in clientAddr;
@@ -294,7 +296,7 @@ int main() {
         }
 
         std::thread(connection_thread, clientSocket, clientAddr).detach();
-        std::cout << "userection received\n";
+        std::cout << "Connection received\n";
     }
 
     close(serverSocket);

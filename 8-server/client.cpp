@@ -44,84 +44,90 @@ bool find_servers(sockaddr_in& serverAddress, int gateway_port) {
 }
 
 void recv_thread(int clientSocket) {
+    std::cout << "[Debug] Started recv thread\n";
     while (true) {
         int opscode;
         if (!recv_i32(clientSocket, opscode)) {
-            std::cout << "Failed to receive body\n";
+            std::cout << "[Debug] Failed to receive body\n";
             break;
         }
         Ops ops = static_cast<Ops>(opscode);
         switch(ops) {
             case Ops::ServerMessage: {
                 ServerMessageBody body;
-                body.recv(clientSocket);
+                if (!body.recv(clientSocket)) break;
                 std::cout << "[Server] " << body.msg << "\n";
                 continue;
             }
             case Ops::JoinResp: {
                 JoinResp body;
-                body.recv(clientSocket);
+                if (!body.recv(clientSocket)) break;
                 curr_room = body.roomname;
                 std::cout << "[Join Response] Joined " << body.roomname << " " << (body.success ? "Success" : "Failed") << "\n";
                 continue;
             }
             case Ops::LeaveResp: {
                 LeaveResp body;
-                body.recv(clientSocket);
+                if (!body.recv(clientSocket)) break;
                 curr_room.clear();
                 std::cout << "[Leave Response] Left " << body.roomname << " " << (body.success ? "Success" : "Failed") << "\n";
                 continue;
             }
             case Ops::ListRoomMembersResp: {
                 ListRoomMembersResp body;
-                body.recv(clientSocket);
-                std::cout << "Members:\n";
+                if (!body.recv(clientSocket)) break;
+                std::cout << "[Members Response] Members:\n";
                 for (auto& p: body.members) {
                     std::cout << " - " << p.name << "(" << p.address << " / " << p.fd << ")\n";
                 }
                 std::cout << "\n";
+                continue;
             }
             case Ops::ListRoomsResp: {
                 ListRoomsResp body;
-                body.recv(clientSocket);
-                std::cout << "Rooms:\n";
+                if (!body.recv(clientSocket)) break;
+                std::cout << "[Rooms response] Rooms:\n";
                 for (auto& p: body.rooms) {
                     std::cout << " - " << p << "\n";
                 }
                 std::cout << "\n";
+                continue;
             }
             case Ops::CreateRoomResp: {
                 CreateRoomResp body;
-                body.recv(clientSocket);
+                if (!body.recv(clientSocket)) break;
                 std::cout << "[Create Room Response] " << body.room_name << " creation " << (body.success ? "success" : "failed") << "\n";
+                continue;
             }
             case Ops::RoomMessageResp: {
                 RoomMessageResp body;
-                body.recv(clientSocket);
+                if (!body.recv(clientSocket)) break;
                 std::cout << body.user << " === " << body.msg << "\n";
+                continue;
             }
         }
         break;
     }
+    std::cout << "[Debug] Stopped recv thread\n";
 }
 
 
 int main() {
     int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (clientSocket < 0) {
-        std::cerr << "Failed to create socket\n";
+        std::cerr << "[Debug] Failed to create socket\n";
         return 1;
     }
 
     sockaddr_in serverAddress; 
     if (!find_servers(serverAddress, 12345)) {
-        std::cerr << "Unable to find server\n";
+        std::cerr << "[Debug] Unable to find server\n";
         return 1;
     };
 
-    std::cout << "Found server address" << get_str_address(serverAddress) << "\n";
+    std::cout << "[Debug] Found server address " << get_str_address(serverAddress) << "\n";
     if (connect(clientSocket, reinterpret_cast<const sockaddr*>(&serverAddress), sizeof(serverAddress)) != 0) {
-        std::cerr << "Failed to connect: " << errno << "\n";
+        std::cerr << "[Debug] Failed to connect: " << errno << "\n";
         close(clientSocket);
         return 1;
     };
@@ -134,23 +140,24 @@ int main() {
         std::string_view command;
         std::string_view rest;
         if (parse_command(buffer, command, rest)) {
-            if (command == "/join") {
+            if (command == "join") {
                 std::string_view roomname;
+                std::cout << roomname << "\n";
                 if (parse_args(rest, roomname) == 1) {
                     JoinBody body {std::string(roomname)};
                     send_body(clientSocket, body);
                 } else {
                     std::cout << "Help: /join <room_name>\n";
                 }
-            } else if (command == "/leave") {
+            } else if (command == "leave") {
                 std::string_view roomname;
                 if (parse_args(rest, roomname) == 1) {
                     LeaveBody body{std::string(roomname)};
-                    return send_body(clientSocket, body);
+                    send_body(clientSocket, body);
                 } else {
                     std::cout << "Help: /leave <room_name>\n";
                 }
-            } else if (command == "/members") {
+            } else if (command == "members") {
                 std::string_view roomname;
                 if (parse_args(rest, roomname) == 1) {
                     int room_id = 0;
@@ -159,9 +166,9 @@ int main() {
                 } else {
                     std::cout << "Help: /members <room_id>\n";
                 }
-            } else if (command == "/list") {
+            } else if (command == "list") {
                 send_body(clientSocket, ListRoomsBody{});
-            } else if (command == "/create") {
+            } else if (command == "create") {
                 std::string_view roomname;
                 if (parse_args(rest, roomname) == 1) {
                     CreateRoomBody body{std::string(roomname)};
@@ -178,9 +185,9 @@ int main() {
                 send_body(clientSocket, body);
             }
         }
-        return false;
     }
 
+    std::cout << "[Debug] Closing socket\n";
     close(clientSocket);
     return 0;
 }
