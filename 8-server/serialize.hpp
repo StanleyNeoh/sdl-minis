@@ -21,6 +21,7 @@ enum struct Ops: int {
     CreateRoomResp,
     RoomMessage,
     RoomMessageResp,
+    RoomMessageBroadcast,
 };
 
 struct ServerMessageBody {
@@ -204,11 +205,30 @@ struct RoomMessageBody {
 
 struct RoomMessageResp {
     static constexpr Ops ops = Ops::RoomMessageResp;
+    std::string roomname;
+    int success;
+
+    RoomMessageResp() = default;
+
+    bool send(int socket) const {
+        return send_string(socket, roomname)
+            && send_i32(socket, success);
+    }
+
+    bool recv(int socket) {
+        return recv_string(socket, roomname)
+            && recv_i32(socket, success);
+    }
+};
+
+
+struct RoomMessageBroadcast {
+    static constexpr Ops ops = Ops::RoomMessageBroadcast;
     UserData user;
     std::string msg;
 
-    RoomMessageResp() = default;
-    RoomMessageResp(const User& user, std::string_view msg): user(user), msg(msg) {}
+    RoomMessageBroadcast() = default;
+    RoomMessageBroadcast(const User& user, std::string_view msg): user(user), msg(msg) {}
 
     bool send(int socket) const {
         return user.send(socket)

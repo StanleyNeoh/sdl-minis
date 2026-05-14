@@ -159,7 +159,7 @@ struct ControlCenter {
         return true;
     }
 
-    bool broadcast_msg(int clientSocket, std::string_view msg) {
+    bool broadcast_msg(int clientSocket, std::string_view msg, std::string& roomname) {
         User* user;
         if (!get_user(clientSocket, user)) return false;
         if (user->curr_room.empty()) return false;
@@ -167,9 +167,10 @@ struct ControlCenter {
         Room* room;
         if (!get_room(user->curr_room, room)) return false;
 
-        RoomMessageResp body(*user, msg);
+        RoomMessageBroadcast body(*user, msg);
         auto& room_users = room->room_users;
         std::shared_lock lock(room->room_users_mut);
+        roomname = room->roomname;
         for (int fd: room_users) {
             if (!send_body(fd, body)) return false;
         }
@@ -268,7 +269,9 @@ int connection_thread(int clientSocket, sockaddr_in clientAddr) {
             case Ops::RoomMessage: {
                 RoomMessageBody body;
                 if (!body.recv(clientSocket)) break;
-                center.broadcast_msg(clientSocket, body.msg);
+                RoomMessageResp resp;
+                resp.success = center.broadcast_msg(clientSocket, body.msg, resp.roomname);
+                if (!send_body(clientSocket, resp)) break;
                 continue;
             }
             default:

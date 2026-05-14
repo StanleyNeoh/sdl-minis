@@ -98,6 +98,14 @@ void recv_thread(int clientSocket) {
             case Ops::RoomMessageResp: {
                 RoomMessageResp body;
                 if (!body.recv(clientSocket)) break;
+                if (body.roomname.empty()) {
+                    std::cout << "Error: Cannot send message when not in a room.\n";
+                }
+                continue;
+            }
+            case Ops::RoomMessageBroadcast: {
+                RoomMessageBroadcast body;
+                if (!body.recv(clientSocket)) break;
                 std::cout << body.user << " === " << body.msg << "\n";
                 continue;
             }
