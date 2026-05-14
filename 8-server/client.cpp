@@ -32,7 +32,7 @@ bool find_servers(sockaddr_in& serverAddress, int gateway_port) {
     {
         sockaddr_in broadcastAddress = create_address(gateway_port, INADDR_BROADCAST);
         static std::string_view buffer = "hi";
-        ssize_t n = sendto(clientSocket, &buffer, buffer.size(), 0, reinterpret_cast<sockaddr*>(&broadcastAddress), sizeof(broadcastAddress));
+        ssize_t n = sendto(clientSocket, buffer.data(), buffer.size(), 0, reinterpret_cast<sockaddr*>(&broadcastAddress), sizeof(broadcastAddress));
         std::cout << "Sending UDP n=" << n << " to " << get_str_address(serverAddress) << ". ErrNo: " << errno <<"\n";
     }
 

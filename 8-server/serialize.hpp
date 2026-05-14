@@ -4,6 +4,7 @@
 #include <vector>
 #include "utils.hpp"
 #include "network.hpp"
+#include "types.hpp"
 
 enum struct Ops: int {
     Uninitialized,
@@ -103,30 +104,7 @@ struct ListRoomsBody {
 struct ListRoomsResp {
     static constexpr Ops ops = Ops::ListRoomsResp;
 
-    struct Room {
-        std::string name;
-        int num_members;
-
-        Room() = default;
-        Room(std::string_view name, int num_members): name(name), num_members(num_members) {}
-
-        bool send(int socket) const {
-            return send_string(socket, name)
-                && send_i32(socket, num_members);
-        }
-
-        bool recv(int socket) {
-            return recv_string(socket, name)
-                && recv_i32(socket, num_members);
-        }
-
-        friend std::ostream& operator<<(std::ostream& o, const Room& room) {
-            o << room.name << "(" << room.num_members << ")";
-            return o;
-        }
-    };
-
-    std::vector<Room> rooms;
+    std::vector<RoomData> rooms;
 
     bool send(int socket) const {
         if (!send_i32(socket, rooms.size())) return false;
@@ -140,7 +118,7 @@ struct ListRoomsResp {
         int nitems = 0;
         if (!recv_i32(socket, nitems)) return false;
         for (int i = 0; i < nitems; i++) {
-            Room room;
+            RoomData room;
             if (!room.recv(socket)) return false;
             rooms.push_back(std::move(room));
         }
@@ -161,35 +139,9 @@ struct ListRoomMembersBody {
     }
 };
 
-struct User {
-    std::string name;
-    std::string address;
-    int fd;
-
-    User() = default;
-    User(const std::string& address, int fd): name(address), address(address), fd(fd) {}
-
-    bool send(int socket) const {
-        return send_string(socket, name)
-        && send_string(socket, address)
-        && send_i32(socket, fd);
-    }
-
-    bool recv(int socket) {
-        return recv_string(socket, name)
-        && recv_string(socket, address)
-        && recv_i32(socket, fd);
-    }
-
-    friend std::ostream& operator<<(std::ostream& o, const User& conn) {
-        o << "(" << conn.name << "/" << conn.address << "/" << conn.fd << ")";
-        return o;
-    }
-};
-
 struct ListRoomMembersResp {
     static constexpr Ops ops = Ops::ListRoomMembersResp;
-    std::vector<User> members;
+    std::vector<UserData> members;
 
     ListRoomMembersResp() = default;
 
@@ -205,7 +157,7 @@ struct ListRoomMembersResp {
         int nitems = 0;
         if (!recv_i32(socket, nitems)) return false; 
         for (int i = 0; i < nitems; i++) {
-            User member;
+            UserData member;
             if (!member.recv(socket)) return false;
             members.push_back(std::move(member));
         }
@@ -260,7 +212,7 @@ struct RoomMessageBody {
 
 struct RoomMessageResp {
     static constexpr Ops ops = Ops::RoomMessageResp;
-    User user;
+    UserData user;
     std::string msg;
 
     RoomMessageResp() = default;
