@@ -68,15 +68,10 @@ struct JoinResp {
 
 struct LeaveBody {
     static constexpr Ops ops = Ops::Leave;
-    std::string roomname;
 
-    bool send(int socket) const {
-        return send_string(socket, roomname);
-    }
+    bool send(int socket) const { return true; }
 
-    bool recv(int socket) {
-        return recv_string(socket, roomname);
-    }
+    bool recv(int socket) { return true; }
 };
 
 struct LeaveResp {
@@ -196,17 +191,14 @@ struct CreateRoomResp {
 
 struct RoomMessageBody {
     static constexpr Ops ops = Ops::RoomMessage;
-    std::string room_name;
     std::string msg;
 
     bool send(int socket) const {
-        return send_string(socket, room_name)
-            && send_string(socket, msg);
+        return send_string(socket, msg);
     }
 
     bool recv(int socket) {
-        return recv_string(socket, room_name)
-            && recv_string(socket, msg);
+        return recv_string(socket, msg);
     }
 };
 

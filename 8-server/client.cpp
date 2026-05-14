@@ -11,8 +11,6 @@
 #include "utils.hpp"
 
 
-std::string curr_room;
-
 bool find_servers(sockaddr_in& serverAddress, int gateway_port) {
     int clientSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (clientSocket < 0) {
@@ -62,14 +60,12 @@ void recv_thread(int clientSocket) {
             case Ops::JoinResp: {
                 JoinResp body;
                 if (!body.recv(clientSocket)) break;
-                curr_room = body.roomname;
                 std::cout << "[Join Response] Joined " << body.roomname << " " << (body.success ? "Success" : "Failed") << "\n";
                 continue;
             }
             case Ops::LeaveResp: {
                 LeaveResp body;
                 if (!body.recv(clientSocket)) break;
-                curr_room.clear();
                 std::cout << "[Leave Response] Left " << body.roomname << " " << (body.success ? "Success" : "Failed") << "\n";
                 continue;
             }
@@ -152,7 +148,7 @@ int main() {
             } else if (command == "leave") {
                 std::string_view roomname;
                 if (parse_args(rest, roomname) == 1) {
-                    LeaveBody body{std::string(roomname)};
+                    LeaveBody body;
                     send_body(clientSocket, body);
                 } else {
                     std::cout << "Help: /leave <room_name>\n";
@@ -178,12 +174,8 @@ int main() {
                 }
             }
         } else {
-            if (curr_room.empty()) {
-                std::cout << "[Error] Not in any room.\n";
-            } else {
-                RoomMessageBody body{curr_room, std::string(buffer)};
-                send_body(clientSocket, body);
-            }
+            RoomMessageBody body{std::string(buffer)};
+            send_body(clientSocket, body);
         }
     }
 

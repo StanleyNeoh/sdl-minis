@@ -23,33 +23,56 @@ struct ControlCenter {
     mutable std::shared_mutex users_mut;
     std::unordered_map<int, std::unique_ptr<User>> users;
 
+    bool get_user(int fd, User*& user) {
+        {
+            std::shared_lock lock(users_mut);
+            if (users.find(fd) == users.end()) return false;
+        }
+        user = users[fd].get();
+        return true;
+    }
+
     bool register_user(const std::string& address, int fd) {
+        User* user;
+        if (get_user(fd, user)) return false;
         std::unique_lock lock(users_mut);
-        if (users.find(fd) != users.end()) return false;
         users[fd] = std::make_unique<User>(address, fd);
         return true;
     }
 
     bool unregister_user(int fd) {
+        User* user;
+        if (!get_user(fd, user)) return false;
+
         std::unique_lock lock(users_mut);
-        if (users.find(fd) == users.end()) return false;
+        std::string curr_room;
+        leave_room(fd, curr_room);
         users.erase(fd);
         return true;
     }
 
     bool rename_user(int fd, std::string_view name) {
-        {
-            std::shared_lock lock(users_mut);
-            if (users.find(fd) == users.end()) return false;
-        }
-        std::unique_lock lock(users[fd]->mut);
-        users[fd]->name = name;
+        User* user;
+        if (!get_user(fd, user)) return false;
+        std::unique_lock lock(user->mut);
+        user->name = name;
         return true;
     }
 
-    const User& get_user(int fd) {
-        std::shared_lock lock(users_mut);
-        return *users[fd].get();
+    bool get_curr_room(int fd, std::string& roomname) {
+        User* user;
+        if (!get_user(fd, user)) return false;
+        std::shared_lock lock(user->mut);
+        roomname = user->curr_room;
+        return !roomname.empty();
+    }
+
+    bool set_curr_room(int fd, std::string_view roomname) {
+        User* user;
+        if (!get_user(fd, user)) return false;
+        std::unique_lock lock(user->mut);
+        user->curr_room = roomname;
+        return true;
     }
 
     size_t get_num_users() const {
@@ -80,12 +103,15 @@ struct ControlCenter {
         std::shared_lock lock(room->room_users_mut);
         for (int fd: room->room_users) {
             std::shared_lock lock(users[fd]->mut);
-            body.members.emplace_back(get_user(fd));
+            User* user;
+            if (get_user(fd, user)) {
+                body.members.emplace_back(*user);
+            }
         }
         return body;
     }
 
-    bool get_room(std::string& roomname, Room*& room) {
+    bool get_room(const std::string& roomname, Room*& room) {
         std::shared_lock lock(rooms_mut);
         if (rooms.find(roomname) == rooms.end()) return false;
         room = rooms[roomname].get();
@@ -93,6 +119,9 @@ struct ControlCenter {
     }
 
     bool join_room(int clientSocket, std::string& roomname) {
+        std::string curr_room;
+        leave_room(clientSocket, curr_room);
+
         Room* room;
         if (!get_room(roomname, room)) return false;
 
@@ -100,17 +129,24 @@ struct ControlCenter {
         std::unique_lock lock2(room->room_users_mut);
         if (room_users.find(clientSocket) != room_users.end()) return false;
         room_users.insert(clientSocket);
+        set_curr_room(clientSocket, roomname);
         return true;
     }
 
-    bool leave_room(int clientSocket, std::string& roomname) {
+    bool leave_room(int clientSocket, std::string& curr_room) {
+        User* user;
+        if (!get_user(clientSocket, user)) return false;
+        curr_room = user->curr_room;
+        if (curr_room.empty()) return false;
+
         Room* room;
-        if (!get_room(roomname, room)) return false;
+        if (!get_room(curr_room, room)) return false;
 
         auto& room_users = room->room_users;
         std::unique_lock lock2(room->room_users_mut);
         if (room_users.find(clientSocket) == room_users.end()) return false;
         room_users.erase(clientSocket);
+        set_curr_room(clientSocket, "");
         return true;
     }
 
@@ -123,13 +159,17 @@ struct ControlCenter {
         return true;
     }
 
-    bool broadcast_msg(std::string& roomname, int clientSocket, std::string_view msg) {
-        Room* room;
-        if (!get_room(roomname, room)) return false;
+    bool broadcast_msg(int clientSocket, std::string_view msg) {
+        User* user;
+        if (!get_user(clientSocket, user)) return false;
+        if (user->curr_room.empty()) return false;
 
-        RoomMessageResp body(get_user(clientSocket), msg);
+        Room* room;
+        if (!get_room(user->curr_room, room)) return false;
+
+        RoomMessageResp body(*user, msg);
         auto& room_users = room->room_users;
-        std::shared_lock lock(rooms[roomname]->room_users_mut);
+        std::shared_lock lock(room->room_users_mut);
         for (int fd: room_users) {
             if (!send_body(fd, body)) return false;
         }
@@ -167,13 +207,14 @@ int gateway_thread(in_port_t tcp_port, in_port_t gateway_port) {
 
 int connection_thread(int clientSocket, sockaddr_in clientAddr) {
     std::string address = get_str_address(clientAddr);
-    if (!center.register_user(address, clientSocket)) {
+    User* user;
+    if (!center.register_user(address, clientSocket) || !center.get_user(clientSocket, user)) {
         std::cout << "Failed to registered user " << address << "\n";
         close(clientSocket);
         return -1;
     };
 
-    std::cout << "Thread started for " << center.get_user(clientSocket) << "\n";
+    std::cout << "Thread started for " << *user << "\n";
 
     while (true) {
         int opscode;
@@ -186,6 +227,8 @@ int connection_thread(int clientSocket, sockaddr_in clientAddr) {
             case Ops::Join: {
                 JoinBody body;
                 if (!body.recv(clientSocket)) break;
+                std::string curr_room;
+                center.leave_room(clientSocket, curr_room);
                 bool success = center.join_room(clientSocket, body.roomname);
                 JoinResp resp{body.roomname, success};
                 if (!send_body(clientSocket, resp)) break;
@@ -194,8 +237,8 @@ int connection_thread(int clientSocket, sockaddr_in clientAddr) {
             case Ops::Leave: {
                 LeaveBody body;
                 if (!body.recv(clientSocket)) break;
-                bool success = center.leave_room(clientSocket, body.roomname);
-                LeaveResp resp{body.roomname, success};
+                LeaveResp resp;
+                resp.success = center.leave_room(clientSocket, resp.roomname);
                 if (!send_body(clientSocket, resp)) break;
                 continue;
             }
@@ -225,7 +268,7 @@ int connection_thread(int clientSocket, sockaddr_in clientAddr) {
             case Ops::RoomMessage: {
                 RoomMessageBody body;
                 if (!body.recv(clientSocket)) break;
-                center.broadcast_msg(body.room_name, clientSocket, body.msg);
+                center.broadcast_msg(clientSocket, body.msg);
                 continue;
             }
             default:
@@ -233,8 +276,10 @@ int connection_thread(int clientSocket, sockaddr_in clientAddr) {
         }
         break;
     }
+
+    center.unregister_user(clientSocket);
     close(clientSocket);
-    std::cout << "Thread closed for " << center.get_user(clientSocket) << "\n";
+    std::cout << "Thread closed for " << *user << "\n";
     return 0;
 }
 

@@ -25,6 +25,7 @@ struct User {
     mutable std::shared_mutex mut;
     std::string name;
     std::string address;
+    std::string curr_room;
     int fd;
 
     User(const std::string& address, int fd): name(address), address(address), fd(fd) {}
