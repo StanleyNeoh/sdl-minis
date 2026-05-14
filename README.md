@@ -30,3 +30,9 @@ This repository contains simple projects demonstrating the use of SDL2.
   - Lock-free parallel collision resolution via greedy graph coloring — pairs are partitioned into conflict-free batches so no two pairs in a batch share a particle
   - Cache-friendly compact particle layout and chunked quadtree storage to reduce allocation overhead
   - To run, execute `./6-particlebox` from the build folder.
+- `7-raytracer`: A raytracer with first person camera controls
+  - Raytracing is spread across frames and multithreaded to keep frames responsive while rendering
+  - To run, execute `./7-raytracer` from the build folder.
+- `8-server`: A simple TCP server that supports multiple clients chatting with each other on the same local network.
+  - Supports group chats
+  - To run, execute `./8-server` from the build folder.
