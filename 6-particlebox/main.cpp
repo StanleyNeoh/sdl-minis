@@ -105,4 +105,6 @@ int main() {
             step_and_render(pb);
         }
     }
+
+    return 0;
 }

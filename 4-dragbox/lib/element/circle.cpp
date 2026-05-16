@@ -12,13 +12,13 @@ void Circle::reload_tex(const SDL_Color& color) {
         rect.h
     );
     SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
-    u_int32_t _format;
+    Uint32 _format;
     SDL_QueryTexture(tex, &_format, NULL, NULL, NULL);
     SDL_PixelFormat* format = SDL_AllocFormat(_format);
-    u_int32_t bcolor = SDL_MapRGBA(format, color.r, color.g, color.b, color.a);
+    Uint32 bcolor = SDL_MapRGBA(format, color.r, color.g, color.b, color.a);
     SDL_FreeFormat(format);
 
-    u_int32_t* pixels;
+    Uint32* pixels;
     int pitch;
     SDL_LockTexture(tex, NULL, reinterpret_cast<void**>(&pixels), &pitch);
     float rr = rect.w / 2.0;

@@ -358,7 +358,9 @@ struct Board: public Entity<Board<M, N>> {
     void handle_mouse_up(const SDL_MouseButtonEvent& e) {
         if (winner != NoneKey) return;
         if (net != NULL) {
-            net->ui_events.block_push({move: {NetworkEventType::MOVE, PlayerKey, -1, col_i}});
+            UiEvent event{};
+            event.move = {NetworkEventType::MOVE, PlayerKey, -1, col_i};
+            net->ui_events.block_push(event);
         }
     }
 

@@ -4,7 +4,6 @@
 
 #include <SDL.h>
 #include <iostream>
-#include <pthread.h>
 
 
 struct App {

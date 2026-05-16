@@ -51,7 +51,7 @@ struct ParticleBox {
                 float pmass = get_rand_float(min_mass, max_mass);
                 // Hue from 240 (blue, light) → 0 (red, heavy), exponential decay on absolute mass
                 RGB rgb = hue_to_rgb(std::exp(-pmass / 20.0f) * 240.0f);
-                particles.emplace_back(Particle{x: x, y: y, vx: vx, vy: vy, rad: prad, mass: pmass, r: rgb.r, g: rgb.g, b: rgb.b});
+                particles.emplace_back(Particle{.x = x, .y = y, .vx = vx, .vy = vy, .rad = prad, .mass = pmass, .r = rgb.r, .g = rgb.g, .b = rgb.b});
             }
         } else if (req < 0) {
             for (int i = 0; i < -req; i++) {

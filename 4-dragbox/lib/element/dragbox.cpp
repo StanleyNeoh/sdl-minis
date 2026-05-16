@@ -11,12 +11,16 @@ void DragBox::handle_mouse_down(const SDL_MouseButtonEvent& e) {
     focus = last_hover;
     focus_off.x = app->mouse_pos.x - last_hover->rect.x;
     focus_off.y = app->mouse_pos.y - last_hover->rect.y;
-    focus->handle_action(Action{highlight: HighlightAction(true)});
+    Action action{};
+    action.highlight = HighlightAction(true);
+    focus->handle_action(action);
 }
 
 void DragBox::handle_mouse_up(const SDL_MouseButtonEvent& e) {
     if (focus != nullptr) {
-        focus->handle_action(Action{highlight: HighlightAction(false)});
+        Action action{};
+        action.highlight = HighlightAction(false);
+        focus->handle_action(action);
         focus = nullptr;
     }
 }

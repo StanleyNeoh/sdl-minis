@@ -93,4 +93,6 @@ int main() {
         SDL_RenderCopy(renderer, screen_tex, NULL, NULL);
         SDL_RenderPresent(renderer);
     }
+
+    return 0;
 }

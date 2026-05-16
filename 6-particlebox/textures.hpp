@@ -4,7 +4,7 @@
 #include <SDL.h>
 #include <vector>
 
-template <int W, int H, u_int32_t Color = 0xFFFFFFFF>
+template <int W, int H, Uint32 Color = 0xFFFFFFFF>
 struct Circle {
     SDL_Texture* tex = NULL;
 
@@ -13,7 +13,7 @@ struct Circle {
         tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, W, H);
         SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_BLEND);
         std::vector<Uint32> pixels(W * H);
-        int pitch = W * sizeof(u_int32_t);
+        int pitch = W * sizeof(Uint32);
         float wr = static_cast<float>(W) / 2;
         float hr = static_cast<float>(H) / 2;
         for (int y = 0; y < H; y++) {

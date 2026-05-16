@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
 
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -52,19 +54,10 @@ FetchContent_MakeAvailable(googletest)
 
 enable_testing()
 
-link_libraries(SDL2::SDL2)
-if(TARGET SDL2::SDL2main)
-    link_libraries(SDL2::SDL2main)
-endif()
-
-if (TARGET SDL2_ttf::SDL2_ttf)
-    link_libraries(SDL2_ttf::SDL2_ttf)
-endif()
-
 # Add the vendored imgui library
 include_directories("${imgui_SOURCE_DIR}")
 include_directories("${imgui_SOURCE_DIR}/backends")
-add_library(imgui_lib 
+add_library(imgui_lib STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -74,9 +67,20 @@ add_library(imgui_lib
     ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer2.cpp
 )
 target_link_libraries(imgui_lib PRIVATE SDL2::SDL2)
-link_libraries(imgui_lib)
 
-add_compile_definitions(BLOB_DIR=\"${CMAKE_SOURCE_DIR}/blobs/\")
+set(SDL_MINIS_COMMON_LIBS SDL2::SDL2 imgui_lib)
+
+if(TARGET SDL2_ttf::SDL2_ttf)
+    list(APPEND SDL_MINIS_COMMON_LIBS SDL2_ttf::SDL2_ttf)
+endif()
+
+function(sdl_minis_link_common target_name)
+    if(TARGET ${target_name})
+        target_link_libraries(${target_name} PRIVATE ${SDL_MINIS_COMMON_LIBS})
+    endif()
+endfunction()
+
+add_compile_definitions(BLOB_DIR=\"${CMAKE_SOURCE_DIR}/blobs/\" SDL_MAIN_HANDLED)
 
 # Projects
 add_subdirectory(1-stamp)
@@ -87,3 +91,13 @@ add_subdirectory(5-snake)
 add_subdirectory(6-particlebox)
 add_subdirectory(7-raytracer)
 add_subdirectory(8-server)
+
+sdl_minis_link_common(stamp)
+sdl_minis_link_common(sketchpad)
+sdl_minis_link_common(connect4)
+sdl_minis_link_common(dragbox)
+sdl_minis_link_common(snake)
+sdl_minis_link_common(particlebox)
+sdl_minis_link_common(raytracer)
+sdl_minis_link_common(tcp)
+sdl_minis_link_common(client)

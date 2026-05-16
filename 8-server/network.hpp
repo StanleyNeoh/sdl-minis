@@ -4,10 +4,8 @@
 
 #include <cstdint>
 #include <cstring>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
 #include <string>
+#include "platform_socket.hpp"
 
 bool recv_exact(int socket, void* buffer, std::size_t size) {
     auto* bytes = static_cast<char*>(buffer);

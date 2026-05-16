@@ -4,14 +4,12 @@
 #include <memory>
 #include <string>
 #include <shared_mutex>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <thread>
-#include <unistd.h>
 #include <vector>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
+#include "platform_socket.hpp"
 #include "utils.hpp"
 #include "serialize.hpp"
 #include "types.hpp"
@@ -183,9 +181,19 @@ ControlCenter center;
 int gateway_thread(in_port_t tcp_port, in_port_t gateway_port) {
     std::cout << "Started gateway thread with tcp_port=" << tcp_port << " and gateway_port=" << gateway_port << "\n";
     int gatewaySocket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (gatewaySocket < 0) {
+        std::cerr << "Failed to create gateway UDP socket: " << socket_error() << "\n";
+        return 1;
+    }
+
+    int reuse_addr = 1;
+    if (setsockopt(gatewaySocket, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuse_addr), sizeof(reuse_addr)) != 0) {
+        std::cerr << "Failed to set gateway SO_REUSEADDR: " << socket_error() << "\n";
+    }
+
     sockaddr_in socketAddress = create_address(gateway_port);
     if (bind(gatewaySocket, reinterpret_cast<const sockaddr*>(&socketAddress), sizeof(socketAddress)) != 0) {
-        std::cerr << "Failed to bind: " << errno << "\n";
+        std::cerr << "Failed to bind gateway UDP socket on port " << gateway_port << ": " << socket_error() << "\n";
         close(gatewaySocket);
         return 1;
     }
@@ -194,14 +202,18 @@ int gateway_thread(in_port_t tcp_port, in_port_t gateway_port) {
     constexpr size_t buf_size = 1024;
     char buffer[buf_size + 1] = {0};
     sockaddr_in clientAddr;
-    socklen_t clientAddrSize = sizeof(clientAddr);
     while (true) {
-        size_t n = recvfrom(gatewaySocket, buffer, buf_size, MSG_TRUNC, reinterpret_cast<sockaddr*>(&clientAddr), &clientAddrSize);
-        if (n <= 0) continue;
-        n = sendto(gatewaySocket, &_tcp_port, sizeof(_tcp_port), 0, reinterpret_cast<sockaddr*>(&clientAddr), clientAddrSize);
+        socklen_t clientAddrSize = sizeof(clientAddr);
+        ssize_t n = recvfrom(gatewaySocket, buffer, buf_size, 0, reinterpret_cast<sockaddr*>(&clientAddr), &clientAddrSize);
+        if (n <= 0) {
+            std::cerr << "Gateway recvfrom failed: " << socket_error() << "\n";
+            continue;
+        }
+        std::cout << "Gateway received " << n << " bytes from " << get_str_address(clientAddr) << "\n";
+        n = sendto(gatewaySocket, reinterpret_cast<const char*>(&_tcp_port), sizeof(_tcp_port), 0, reinterpret_cast<sockaddr*>(&clientAddr), clientAddrSize);
         if (n <= 0) {
             std::string clientip = get_str_address(clientAddr);
-            std::cout << "Received msg from " << clientip << " but fail to respond.\n";
+            std::cout << "Received msg from " << clientip << " but failed to respond: " << socket_error() << "\n";
         }
     }
 }
@@ -295,6 +307,9 @@ int connection_thread(int clientSocket, sockaddr_in clientAddr) {
 }
 
 int main() {
+    SocketSession socket_session;
+    if (!socket_session.initialized) return 1;
+
     constexpr in_port_t gateway_port = 12345;
     constexpr in_port_t tcp_port = 8080;
     std::thread _gateway_thread(gateway_thread, 8080, 12345);
@@ -307,7 +322,7 @@ int main() {
     }
 
     int reuse_addr = 1;
-    setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr));
+    setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuse_addr), sizeof(reuse_addr));
 
     sockaddr_in socketAddress = create_address(tcp_port, INADDR_ANY);
     if (bind(serverSocket, reinterpret_cast<const sockaddr*>(&socketAddress), sizeof(socketAddress)) != 0) {

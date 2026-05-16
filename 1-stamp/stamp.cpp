@@ -1,4 +1,4 @@
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include <stdio.h>
 #include <vector>
 
@@ -43,7 +43,6 @@ bool loadMedia()
 {
 	// Loading success flag
 	bool success = true;
-	char path[256];
 	gHelloWorld = SDL_LoadBMP(BLOB_DIR "bitmaps/hello_world.bmp"); // relative to build dir
 	if (gHelloWorld == NULL)
 	{
@@ -83,7 +82,7 @@ struct StampManager
 			return;
 		}
 		d_stamp_surface = SDL_ConvertSurface(stamp_surface, stamp_surface->format, 0);
-		SDL_SetSurfaceColorMod(d_stamp_surface, 255.0, 1.0, 1.0);
+		SDL_SetSurfaceColorMod(d_stamp_surface, 255, 1, 1);
 	}
 
 	~StampManager()

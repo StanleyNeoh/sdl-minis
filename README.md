@@ -8,6 +8,19 @@ This repository contains simple projects demonstrating the use of SDL2.
 - `cd build` into the build folder.
 - Run `make` to build the projects.
 
+## Build with Ninja
+- Install Ninja and make sure `ninja` is available on your `PATH`.
+- From the repository root, configure a Ninja build directory:
+  - `cmake -S . -B build-ninja -G Ninja`
+- Build all projects:
+  - `cmake --build build-ninja`
+- Build a single target:
+  - `cmake --build build-ninja --target stamp`
+- Run executables from the generated build directory, for example:
+  - `./build-ninja/1-stamp/stamp`
+
+If an existing build directory was generated with another CMake generator, such as NMake Makefiles, create a new build directory or delete that directory's `CMakeCache.txt` and `CMakeFiles` before switching it to Ninja.
+
 ## Projects
 - `1-stamp`: Basic window that allows stamping images with the mouse.
   - To run, execute `./1-stamp` from the build folder.

@@ -250,7 +250,9 @@ struct Engine {
 
     bool player_plays(int c) {
         int r = grid.drop_piece(c, PlayerKey);
-        net.bot_events.block_push({move: {NetworkEventType::MOVE, PlayerKey, r, c}});
+        BotEvent event{};
+        event.move = {NetworkEventType::MOVE, PlayerKey, r, c};
+        net.bot_events.block_push(event);
         if (r < 0) {
             std::cout << "Player cannot play " << c << "\n";
         } else {
@@ -270,7 +272,9 @@ struct Engine {
             std::cout << s << "|";
         }
         std::cout << "\n" << grid << "\n";
-        net.bot_events.block_push({move: {NetworkEventType::MOVE, BotKey, r, c}});
+        BotEvent event{};
+        event.move = {NetworkEventType::MOVE, BotKey, r, c};
+        net.bot_events.block_push(event);
         return handover_turn();
     }
 
@@ -304,7 +308,9 @@ struct Engine {
         default:
             return false;
         }
-        net.bot_events.block_push({game_end: {NetworkEventType::GAME_END, winner, marked}});
+        BotEvent event{};
+        event.game_end = {NetworkEventType::GAME_END, winner, marked};
+        net.bot_events.block_push(event);
         return true;
     }
 };

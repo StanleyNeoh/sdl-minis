@@ -14,7 +14,7 @@ struct Particle {
     float vy = 0.0f;
     float rad = 1.0f;
     float mass = 1.0f;
-    u_int8_t r = 255, g = 255, b = 255;
+    Uint8 r = 255, g = 255, b = 255;
 
     bool is_overlap(const Particle& other) const {
         float dx = x - other.x;

@@ -1,10 +1,10 @@
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
-#include <arpa/inet.h>
 #include <charconv>
 #include <string>
 #include <string_view>
+#include "platform_socket.hpp"
 
 std::string_view trim_leading_spaces(std::string_view text) {
     std::size_t start = 0;
