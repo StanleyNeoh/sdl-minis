@@ -77,6 +77,10 @@ endif()
 function(sdl_minis_link_common target_name)
     if(TARGET ${target_name})
         target_link_libraries(${target_name} PRIVATE ${SDL_MINIS_COMMON_LIBS})
+		add_custom_command(TARGET ${target_name} POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${target_name}> $<TARGET_FILE_DIR:${target_name}>
+			COMMAND_EXPAND_LISTS
+		)
     endif()
 endfunction()
 
