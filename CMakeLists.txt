@@ -16,37 +16,37 @@ include(FetchContent)
 
 # SDL2
 FetchContent_Declare(
-    SDL2
-    GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-    GIT_TAG release-2.32.10
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendored/SDL
+	SDL2
+	GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+	GIT_TAG release-2.32.10
+	SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendored/SDL
 )
 FetchContent_MakeAvailable(SDL2)
 
 # SDL2_ttf
 FetchContent_Declare(
-    SDL2_ttf
-    GIT_REPOSITORY https://github.com/libsdl-org/SDL_ttf.git
-    GIT_TAG release-2.24.0
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendored/SDL_ttf
+	SDL2_ttf
+	GIT_REPOSITORY https://github.com/libsdl-org/SDL_ttf.git
+	GIT_TAG release-2.24.0
+	SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendored/SDL_ttf
 )
 FetchContent_MakeAvailable(SDL2_ttf)
 
 # imgui
 FetchContent_Declare(
-    imgui
-    GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG v1.92.5
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendored/imgui
+	imgui
+	GIT_REPOSITORY https://github.com/ocornut/imgui.git
+	GIT_TAG v1.92.5
+	SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendored/imgui
 )
 FetchContent_Populate(imgui)
 
 # GoogleTest
 FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG v1.14.0
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendored/googletest
+	googletest
+	GIT_REPOSITORY https://github.com/google/googletest.git
+	GIT_TAG v1.14.0
+	SOURCE_DIR ${CMAKE_SOURCE_DIR}/vendored/googletest
 )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
@@ -87,6 +87,7 @@ endfunction()
 add_compile_definitions(BLOB_DIR=\"${CMAKE_SOURCE_DIR}/blobs/\" SDL_MAIN_HANDLED)
 
 # Projects
+add_subdirectory(0-imgui-demo)
 add_subdirectory(1-stamp)
 add_subdirectory(2-sketchpad)
 add_subdirectory(3-connect4)
@@ -95,13 +96,3 @@ add_subdirectory(5-snake)
 add_subdirectory(6-particlebox)
 add_subdirectory(7-raytracer)
 add_subdirectory(8-server)
-
-sdl_minis_link_common(stamp)
-sdl_minis_link_common(sketchpad)
-sdl_minis_link_common(connect4)
-sdl_minis_link_common(dragbox)
-sdl_minis_link_common(snake)
-sdl_minis_link_common(particlebox)
-sdl_minis_link_common(raytracer)
-sdl_minis_link_common(tcp)
-sdl_minis_link_common(client)
