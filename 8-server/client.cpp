@@ -8,43 +8,6 @@
 #include "serialize.hpp"
 #include "utils.hpp"
 
-
-bool find_servers(sockaddr_in& serverAddress, int gateway_port) {
-    int clientSocket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (clientSocket < 0) {
-        std::cerr << "Failed to create UDP socket: " << socket_error() << "\n";
-        return false;
-    }
-
-    {
-        int is_broadcast = 1;
-        if (setsockopt(clientSocket, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&is_broadcast), sizeof(is_broadcast)) != 0) {
-            std::cerr << "Failed to set SO_BROADCAST: " << socket_error() << "\n";
-            close(clientSocket);
-            return false;
-        }
-    }
-
-    {
-        sockaddr_in broadcastAddress = create_address(gateway_port, INADDR_BROADCAST);
-        static std::string_view buffer = "hi";
-        ssize_t n = sendto(clientSocket, buffer.data(), static_cast<int>(buffer.size()), 0, reinterpret_cast<sockaddr*>(&broadcastAddress), sizeof(broadcastAddress));
-        std::cout << "Sending UDP n=" << n << " to broadcast port " << gateway_port << ". Error: " << socket_error() <<"\n";
-    }
-
-    in_port_t port;
-    socklen_t addressSize = sizeof(serverAddress);
-    ssize_t n = recvfrom(clientSocket, reinterpret_cast<char*>(&port), sizeof(port), 0, reinterpret_cast<sockaddr*>(&serverAddress), &addressSize);
-    if (n <= 0) {
-        std::cerr << "Failed to receive UDP gateway response: " << socket_error() << "\n";
-        close(clientSocket);
-        return false;
-    }
-    serverAddress.sin_port = port; // suppose to store in network order. Not ntohs required
-    close(clientSocket);
-    return true;
-}
-
 void recv_thread(int clientSocket) {
     std::cout << "[Debug] Started recv thread\n";
     while (true) {
