@@ -77,10 +77,12 @@ endif()
 function(sdl_minis_link_common target_name)
     if(TARGET ${target_name})
         target_link_libraries(${target_name} PRIVATE ${SDL_MINIS_COMMON_LIBS})
-		add_custom_command(TARGET ${target_name} POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${target_name}> $<TARGET_FILE_DIR:${target_name}>
-			COMMAND_EXPAND_LISTS
-		)
+        if(WIN32)
+			add_custom_command(TARGET ${target_name} POST_BUILD
+				COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${target_name}> $<TARGET_FILE_DIR:${target_name}>
+				COMMAND_EXPAND_LISTS
+			)
+        endif()
     endif()
 endfunction()
 
@@ -96,3 +98,4 @@ add_subdirectory(5-snake)
 add_subdirectory(6-particlebox)
 add_subdirectory(7-raytracer)
 add_subdirectory(8-server)
+add_subdirectory(9-p2p-pong)
