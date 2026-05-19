@@ -9,6 +9,7 @@ enum GameState {
     GameState_Uninitialised,
     GameState_Available,
     GameState_InGame,
+    GameState_Closed,
 };
 
 std::atomic<bool> is_running = true;

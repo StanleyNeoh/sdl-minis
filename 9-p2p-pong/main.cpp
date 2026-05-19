@@ -7,6 +7,7 @@
 #endif
 
 #include <iostream>
+#include <vector>
 #include <thread>
 #include "platform_socket.hpp"
 #include "globals.hpp"
@@ -24,14 +25,12 @@ int main(int argc, char** args)
         return 0;
     }
     int tcpPort = std::stoi(args[1]);
-    std::string_view name = args[2];
-    P2P::start_p2p_thread(
-        is_running, 
-        12345, 
-        tcpPort, 
-        name, 
-        10
-    );
+    std::thread _p2p_thread(P2P::main, P2P::Config{
+        .is_running = &is_running,
+        .name = args[2],
+        .tcpPort = tcpPort
+    });
+
     std::thread _tcp_server_thread(tcp_server_thread, tcpPort);
     _tcp_server_thread.detach();
 
@@ -129,23 +128,23 @@ int main(int argc, char** args)
                 std::shared_lock lock(P2P::neighbour_ips_mut);
                 for (auto& p: P2P::neighbour_ips) {
                     char clientIp[INET_ADDRSTRLEN] = {0};
-                    inet_ntop(AF_INET, &p.second.address, clientIp, sizeof(clientIp));
+                    inet_ntop(AF_INET, &p->address, clientIp, sizeof(clientIp));
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%s", p.second.name);
+                    ImGui::Text("%s", p->name);
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("%s:%u", clientIp, p.second.port);
+                    ImGui::Text("%s:%u", clientIp, p->port);
                     ImGui::TableSetColumnIndex(2);
                     float cellWidth = ImGui::GetContentRegionAvail().x;
-                    ImGui::PushID(p.second.id());
+                    ImGui::PushID(p->id());
                     if (ImGui::Button("Connect", ImVec2{cellWidth, 20.0f})) {
-                        logger.log("Click ", clientIp, ": ", p.second.port);
-                        invite_user(p.second);
+                        logger.log("Click ", clientIp, ": ", p->port);
+                        invite_user(*p.get());
                     }
                     ImGui::PopID();
                 }
+                ImGui::EndTable();
             }
-            ImGui::EndTable();
         }
         ImGui::End();
 
@@ -168,6 +167,7 @@ int main(int argc, char** args)
         SDL_RenderPresent(renderer);
     }
     is_running.store(false, std::memory_order_relaxed);
+    _p2p_thread.join();
 
     // Cleanup
     ImGui_ImplSDLRenderer2_Shutdown();
