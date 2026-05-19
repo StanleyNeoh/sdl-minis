@@ -6,9 +6,13 @@
 #include "locdata.hpp"
 #include "platform_socket.hpp"
 
-void connection_thread(int clientSocket, bool is_master) {
+void connection_thread(SocketResource clientSocket, bool is_master) {
+    if (!clientSocket.is_available()) {
+        std::cout << "[Connection] clientsocket was not initialised\n";
+        return;
+    }
+
     curr_state.store(GameState_InGame, std::memory_order_release);
-    int i = 0;
     int alive = 1;
     if (is_master) {
         ssize_t nbytes = send(clientSocket, &alive, sizeof(alive), 0);
@@ -16,7 +20,6 @@ void connection_thread(int clientSocket, bool is_master) {
     }
 
     while (curr_state.load(std::memory_order_acquire) == GameState_InGame) {
-        std::cout << "Game on " << i << "\n";
         ssize_t nbytes = recv(clientSocket, &alive, sizeof(alive), 0);
         if (nbytes == 0) {
             std::cout << "[Connection] Socket is dead. breaking\n";
@@ -30,81 +33,64 @@ void connection_thread(int clientSocket, bool is_master) {
     }
     curr_state.store(GameState_Available, std::memory_order_release);
     std::cout << "[Connection] Closing tcp\n";
-    close(clientSocket);
 };
 
 int invite_user(const LocData& locdata) {
-    int clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (clientSocket < 0) {
-        std::cout << "Failed to create socket\n";
+    SocketResource socketResource(AF_INET, SOCK_STREAM, 0);
+    if (!socketResource.is_available()) {
+        std::cout << "[Invite] Failed to create socket " << socket_error() << "\n";
         return -1;
     }
-    {
-        int reuse_addr = 1;
-        if (setsockopt(clientSocket, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuse_addr), sizeof(reuse_addr))) {
-            std::cout << "Failed to set socket to be reusable\n";
-            close(clientSocket);
-            return -1;
-        }
-    }
-    sockaddr_in serverAddress;
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(locdata.port);
-    serverAddress.sin_addr.s_addr = locdata.address;
 
-    if (connect(clientSocket, reinterpret_cast<const sockaddr*>(&serverAddress), sizeof(serverAddress))) {
-        std::cout << "Failed to connect to tcp server: " << errno << "\n";
-        close(clientSocket);
+    if (socketResource.setsockopt(SO_REUSEADDR, 1)) {
+        std::cout << "[Invite] Failed to set socket to be reusable\n";
         return -1;
     }
-    std::thread _conn_thread(connection_thread, clientSocket, false);
+
+    sockaddr_in serverAddress = create_sockaddr(locdata.address, locdata.port);
+    if (socketResource.connect(serverAddress)) {
+        std::cout << "[Invite] Failed to connect to tcp server: " << errno << "\n";
+        return -1;
+    }
+
+    std::thread _conn_thread(connection_thread, std::move(socketResource), false);
     _conn_thread.detach();
     return -1;
 }
 
 int tcp_server_thread(int tcpPort) {
-    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    if (serverSocket < 0) {
-        std::cout << "Failed to create socket\n";
+    SocketResource socketResource(AF_INET, SOCK_STREAM, 0);
+    if (!socketResource.is_available()) {
+        std::cout << "[TCP] Failed to create socket: " << socket_error() << "\n";
         return -1;
     }
-    {
-        int reuse_addr = 1;
-        if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuse_addr), sizeof(reuse_addr))) {
-            std::cout << "Failed to set socket to be reusable\n";
-            close(serverSocket);
-            return -1;
-        }
+    if (socketResource.setsockopt(SO_REUSEADDR, 1)) {
+        std::cout << "[TCP] Failed to set socket to be reusable\n";
+        return -1;
     }
 
-    sockaddr_in serverAddr;
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(tcpPort);
-    serverAddr.sin_addr.s_addr = INADDR_ANY;
-    if (bind(serverSocket, reinterpret_cast<const sockaddr*>(&serverAddr), sizeof(serverAddr))) {
-        std::cout << "Failed to bind sever to port\n";
-        close(serverSocket);
+    sockaddr_in serverAddr = create_sockaddr(INADDR_ANY, tcpPort);
+    if (socketResource.bind(serverAddr)) {
+        std::cout << "[TCP] Failed to bind sever to port\n";
         return -1;
     }
     
-    if (listen(serverSocket, 1)) {
-        std::cout << "Failed to prepare serversocket to listen\n";
-        close(serverSocket);
+    if (socketResource.listen(1)) {
+        std::cout << "[TCP] Failed to prepare serversocket to listen\n";
         return -1;
     }
-    std::cout << "Listening for connections\n";
+    std::cout << "[TCP] Listening for connections\n";
+
     curr_state.store(GameState_Available, std::memory_order_relaxed);
     while (is_running.load(std::memory_order_relaxed)) {
         sockaddr_in clientAddr;
-        socklen_t socklen = sizeof(clientAddr);
-        int clientSocket = accept(serverSocket, reinterpret_cast<sockaddr*>(&clientAddr), &socklen);
-        if (clientSocket < 0) {
-            std::cout << "Accept failed: " << errno << "\n";
+        SocketResource clientResource = socketResource.accept(clientAddr);
+        if (!clientResource.is_available()) {
+            std::cout << "[TCP] Accept failed: " << errno << "\n";
             continue;
         }
-        connection_thread(clientSocket, true);
+        connection_thread(std::move(clientResource), true);
     }
-    close(serverSocket);
     return 0;
 }
 
