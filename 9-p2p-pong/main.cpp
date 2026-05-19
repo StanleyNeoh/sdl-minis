@@ -34,6 +34,7 @@ int main(int argc, char** args)
         .tcpPort = myloc.port
     });
     std::thread _connection_server_thread(Connection::server, Connection::Config{
+        .currState = &currState,
         .tcpPort = myloc.port
     });
 

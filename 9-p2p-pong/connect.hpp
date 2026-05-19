@@ -3,12 +3,14 @@
 
 #include <iostream>
 #include <thread>
+#include "globals.hpp"
 #include "platform_socket.hpp"
 #include "logger.hpp"
 #include "p2p.hpp"
 
 namespace Connection {
     struct Config {
+        std::atomic<GameState>* currState;
         in_port_t tcpPort;
     };
 
@@ -98,7 +100,9 @@ namespace Connection {
                 logger.log("Accept failed ", socket_error());
                 continue;
             }
-            main(std::move(clientResource), true);
+            if (currState.load(std::memory_order_acquire) == GameState_Available) {
+                main(std::move(clientResource), true);
+            }
         }
         return 0;
     }
