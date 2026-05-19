@@ -27,6 +27,7 @@ int main(int argc, char** args)
     in_port_t tcpPort = static_cast<in_port_t>(std::stoi(args[1]));
     std::thread _p2p_thread(P2P::main, P2P::Config{
         .is_running = &is_running,
+        .curr_state = &curr_state,
         .name = args[2],
         .tcpPort = tcpPort
     });
@@ -120,9 +121,10 @@ int main(int argc, char** args)
 
         ImGui::Begin("LAN Users");
         ImGui::Text("User: %s", args[2]);
-        if (ImGui::BeginTable("neighbour_table", 3, ImGuiTableFlags_Borders, ImVec2(-FLT_MIN, 0.0))) {
+        if (ImGui::BeginTable("neighbour_table", 4, ImGuiTableFlags_Borders, ImVec2(-FLT_MIN, 0.0))) {
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthStretch, 3.0f);
+            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch, 2.0f);
             ImGui::TableSetupColumn("Connect", ImGuiTableColumnFlags_WidthFixed, 120.0f);
             ImGui::TableHeadersRow();
             {
@@ -136,6 +138,23 @@ int main(int argc, char** args)
                     ImGui::TableSetColumnIndex(1);
                     ImGui::Text("%s:%u", clientIp, p->port);
                     ImGui::TableSetColumnIndex(2);
+                    switch (p->state) {
+                        case GameState_Uninitialised:
+                            ImGui::Text("Uninitialised");
+                            break;
+                        case GameState_Available:
+                            ImGui::Text("Available");
+                            break;
+                        case GameState_InGame:
+                            ImGui::Text("In Game");
+                            break;
+                        case GameState_Closed:
+                            ImGui::Text("Closed");
+                            break;
+                        default:
+                            break;
+                    }
+                    ImGui::TableSetColumnIndex(3);
                     float cellWidth = ImGui::GetContentRegionAvail().x;
                     ImGui::PushID(p->id());
                     if (ImGui::Button("Connect", ImVec2{cellWidth, 20.0f})) {

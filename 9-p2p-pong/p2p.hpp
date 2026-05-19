@@ -48,6 +48,7 @@ namespace P2P {
 
     struct Config {
         std::atomic<bool>* is_running;
+        std::atomic<GameState>* curr_state;
         std::string_view name;
         in_port_t tcpPort;
         in_port_t udpPort = 12345;
@@ -116,6 +117,7 @@ namespace P2P {
         sockaddr_in senderAddress;
         socklen_t addressSize = sizeof(senderAddress);
         while (config.is_running->load(std::memory_order_relaxed)) {
+            myloc.state = config.curr_state->load(std::memory_order_relaxed);
             ssize_t n = sendto(socketResource, &myloc, sizeof(myloc), 0, sockaddr_cast(&broadcastAddress), sizeof(broadcastAddress));
             logger.log("Sending UDP n = ", n, " to broadcast port ", config.udpPort, ". Error: ", socket_error());
 
@@ -127,13 +129,11 @@ namespace P2P {
 
                 LocData recvloc(recvPac, senderAddress.sin_addr.s_addr);
                 switch (recvloc.state) {
-                    case GameState_Available:
-                        upsert_neighbour(recvloc);
-                        break;
                     case GameState_Closed:
                         delete_neighbour(recvloc);
                         break;
                     default:
+                        upsert_neighbour(recvloc);
                         break;
                 }
             }
