@@ -90,7 +90,7 @@ namespace Connection {
         }
         logger.log("Listening for connections");
 
-        currState.store(GameState_Available, std::memory_order_relaxed);
+        currState.store(GameState_Available, std::memory_order_release);
         while (isRunning.load(std::memory_order_relaxed)) {
             sockaddr_in clientAddr;
             SocketResource clientResource = socketResource.accept(clientAddr);
