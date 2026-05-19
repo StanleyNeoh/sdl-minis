@@ -54,7 +54,6 @@ namespace P2P {
         return o;
     }
 
-
     struct Config {
         std::atomic<bool>* isRunning;
         std::atomic<GameState>* currState;
@@ -139,12 +138,12 @@ namespace P2P {
         socklen_t addressSize = sizeof(senderAddress);
         while (config.isRunning->load(std::memory_order_relaxed)) {
             myloc.state = config.currState->load(std::memory_order_relaxed);
-            ssize_t n = sendto(socketResource, &myloc, sizeof(myloc), 0, sockaddr_cast(&broadcastAddress), sizeof(broadcastAddress));
+            ssize_t n = socketResource.sendto(&myloc, sizeof(myloc), broadcastAddress);
             logger.log("Sending UDP n = ", n, " to broadcast port ", config.udpPort, ". Error: ", socket_error());
 
             while (true) {
                 LocPacket recvPac;
-                n = recvfrom(socketResource, &recvPac, sizeof(recvPac), 0, sockaddr_cast(&senderAddress), &addressSize);
+                n = socketResource.recvfrom(&recvPac, sizeof(recvPac), senderAddress);
                 logger.log("Received UDP n = ", n, " to broadcast port ", config.udpPort, ". Error: ", socket_error());
                 if (n < 0) break;
 
@@ -161,7 +160,7 @@ namespace P2P {
         }
 
         myloc.state = GameState_Closed;
-        ssize_t n = sendto(socketResource, &myloc, sizeof(myloc), 0, sockaddr_cast(&broadcastAddress), sizeof(broadcastAddress));
+        ssize_t n = socketResource.sendto(&myloc, sizeof(myloc), broadcastAddress);
         logger.log("Closed p2p thread");
     }
 }

@@ -24,12 +24,12 @@ namespace Connection {
         currState.store(GameState_InGame, std::memory_order_release);
         int alive = 1;
         if (is_master) {
-            ssize_t nbytes = send(socketResource, &alive, sizeof(alive), 0);
+            ssize_t nbytes = socketResource.send(&alive, sizeof(alive));
             logger.log("Sending first heartbeat ", nbytes);
         }
 
         while (currState.load(std::memory_order_acquire) == GameState_InGame) {
-            ssize_t nbytes = recv(socketResource, &alive, sizeof(alive), 0);
+            ssize_t nbytes = socketResource.recv(&alive, sizeof(alive));
             if (nbytes <= 0) {
                 logger.log("Socket is dead. Breaking.");
                 break;
@@ -37,7 +37,7 @@ namespace Connection {
                 logger.log("Recved heartbeat ", nbytes);
             }
             std::this_thread::sleep_for(std::chrono::seconds(1));
-            nbytes = send(socketResource, &alive, sizeof(alive), 0);
+            nbytes = socketResource.send(&alive, sizeof(alive));
             logger.log("Sending next heartbeat ", nbytes);
         }
         currState.store(GameState_Available, std::memory_order_release);

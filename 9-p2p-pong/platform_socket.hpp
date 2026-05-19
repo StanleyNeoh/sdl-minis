@@ -133,6 +133,22 @@ struct SocketResource {
 		return ::getsockname(_socket, sockaddr_cast(&address), &socklen);
 	}
 
+	int sendto(const void* buf, size_t buf_size, const sockaddr_in& address, int flags = 0) {
+		return ::sendto(_socket, buf, buf_size, flags, sockaddr_cast(&address), sizeof(address));
+	}
+
+	int recvfrom(void* buf, size_t buf_size, sockaddr_in& address, int flags = 0) {
+		return ::recvfrom(_socket, buf, buf_size, flags, sockaddr_cast(addr), sizeof(address));
+	}
+
+	int send(const void* buf, size_t buf_size, int flags = 0) {
+		return ::send(_socket, buf, buf_size, flags);
+	}
+
+	int recv(void* buf, size_t buf_size, int flags = 0) {
+		return ::recv(_socket, buf, buf_size, flags);
+	}
+
 	SocketResource accept(sockaddr_in& address) {
 		socklen_t socklen = sizeof(address);
 		SocketResource client(::accept(_socket, sockaddr_cast(&address), &socklen));
