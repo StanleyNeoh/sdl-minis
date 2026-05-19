@@ -13,6 +13,7 @@
 #include "p2p.hpp"
 #include "connect.hpp"
 #include "logger.hpp"
+#include "p2p.hpp"
 
 // Main code
 int main(int argc, char** args)
@@ -24,8 +25,13 @@ int main(int argc, char** args)
     }
     int tcpPort = std::stoi(args[1]);
     std::string_view name = args[2];
-    std::thread _p2p_thread(p2p_thread, 12345, tcpPort, name, 10);
-    _p2p_thread.detach();
+    P2P::start_p2p_thread(
+        is_running, 
+        12345, 
+        tcpPort, 
+        name, 
+        10
+    );
     std::thread _tcp_server_thread(tcp_server_thread, tcpPort);
     _tcp_server_thread.detach();
 
@@ -120,8 +126,8 @@ int main(int argc, char** args)
             ImGui::TableSetupColumn("Connect", ImGuiTableColumnFlags_WidthFixed, 120.0f);
             ImGui::TableHeadersRow();
             {
-                std::shared_lock lock(neighbour_ips_mut);
-                for (auto& p: neighbour_ips) {
+                std::shared_lock lock(P2P::neighbour_ips_mut);
+                for (auto& p: P2P::neighbour_ips) {
                     char clientIp[INET_ADDRSTRLEN] = {0};
                     inet_ntop(AF_INET, &p.second.address, clientIp, sizeof(clientIp));
                     ImGui::TableNextRow();

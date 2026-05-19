@@ -3,9 +3,9 @@
 
 #include <iostream>
 #include <thread>
-#include "locdata.hpp"
 #include "platform_socket.hpp"
 #include "logger.hpp"
+#include "p2p.hpp"
 
 void connection_thread(SocketResource socketResource, bool is_master) {
     Logger logger("Connection");
@@ -37,7 +37,7 @@ void connection_thread(SocketResource socketResource, bool is_master) {
     logger.log("Closing heartbeat");
 };
 
-int invite_user(const LocData& locdata) {
+int invite_user(const P2P::LocData& locdata) {
     Logger logger("Invite");
     SocketResource socketResource(AF_INET, SOCK_STREAM, 0);
     if (!socketResource.is_available()) {

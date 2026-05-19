@@ -5,8 +5,6 @@
 #include <atomic>
 #include <unordered_map>
 
-struct LocData;
-
 enum GameState {
     GameState_Uninitialised,
     GameState_Available,
@@ -15,7 +13,5 @@ enum GameState {
 
 std::atomic<bool> is_running = true;
 std::atomic<GameState> curr_state;
-std::shared_mutex neighbour_ips_mut;
-std::unordered_map<size_t, LocData> neighbour_ips;
 
 #endif
