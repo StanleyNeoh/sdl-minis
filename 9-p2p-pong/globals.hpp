@@ -12,7 +12,7 @@ enum GameState {
     GameState_Closed,
 };
 
-std::atomic<bool> is_running = true;
-std::atomic<GameState> curr_state;
+std::atomic<bool> isRunning = true;
+std::atomic<GameState> currState = GameState_Uninitialised;
 
 #endif

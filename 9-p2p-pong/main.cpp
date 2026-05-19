@@ -7,6 +7,7 @@
 #endif
 
 #include <iostream>
+#include <sstream>
 #include <vector>
 #include <thread>
 #include "platform_socket.hpp"
@@ -24,15 +25,16 @@ int main(int argc, char** args)
         logger.log("Help: prog <tcp_port> <name>");
         return 0;
     }
-    in_port_t tcpPort = static_cast<in_port_t>(std::stoi(args[1]));
+    P2P::LocData myloc(P2P::own_ip_address(), std::stoi(args[1]), args[2]);
+    logger.log("My IP: ", myloc);
     std::thread _p2p_thread(P2P::main, P2P::Config{
-        .is_running = &is_running,
-        .curr_state = &curr_state,
-        .name = args[2],
-        .tcpPort = tcpPort
+        .isRunning = &isRunning,
+        .currState = &currState,
+        .name = myloc.name,
+        .tcpPort = myloc.port
     });
     std::thread _connection_server_thread(Connection::server, Connection::Config{
-        .tcpPort = tcpPort
+        .tcpPort = myloc.port
     });
 
     // Setup SDL
@@ -120,7 +122,7 @@ int main(int argc, char** args)
         ImGui::NewFrame();
 
         ImGui::Begin("LAN Users");
-        ImGui::Text("User: %s", args[2]);
+        ImGui::Text("User: %s", myloc.name);
         if (ImGui::BeginTable("neighbour_table", 4, ImGuiTableFlags_Borders, ImVec2(-FLT_MIN, 0.0))) {
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthStretch, 3.0f);
@@ -130,13 +132,13 @@ int main(int argc, char** args)
             {
                 std::shared_lock lock(P2P::neighbour_ips_mut);
                 for (auto& p: P2P::neighbour_ips) {
-                    char clientIp[INET_ADDRSTRLEN] = {0};
-                    inet_ntop(AF_INET, &p->address, clientIp, sizeof(clientIp));
+                    std::stringstream ss;
+                    ss << *p.get();
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     ImGui::Text("%s", p->name);
                     ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("%s:%u", clientIp, p->port);
+                    ImGui::Text("%s", ss.str().data());
                     ImGui::TableSetColumnIndex(2);
                     switch (p->state) {
                         case GameState_Uninitialised:
@@ -157,10 +159,12 @@ int main(int argc, char** args)
                     ImGui::TableSetColumnIndex(3);
                     float cellWidth = ImGui::GetContentRegionAvail().x;
                     ImGui::PushID(p->id());
+                    ImGui::BeginDisabled(p->state != GameState_Available || *p.get() == myloc);
                     if (ImGui::Button("Connect", ImVec2{cellWidth, 20.0f})) {
-                        logger.log("Click ", clientIp, ": ", p->port);
+                        logger.log("Click ", ss.str(), ": ", p->port);
                         Connection::connect_user(*p.get());
                     }
+                    ImGui::EndDisabled();
                     ImGui::PopID();
                 }
                 ImGui::EndTable();
@@ -168,12 +172,12 @@ int main(int argc, char** args)
         }
         ImGui::End();
 
-        if (curr_state.load(std::memory_order_acquire) == GameState_InGame) {
+        if (currState.load(std::memory_order_acquire) == GameState_InGame) {
             ImGui::Begin("Game on");
             ImGui::Text("Game has started");
             if (ImGui::Button("Disconnect", ImVec2{30.0f, 10.0f})) {
                 logger.log("Disconnecting TCP");
-                curr_state.store(GameState_Available, std::memory_order_release);
+                currState.store(GameState_Available, std::memory_order_release);
             }
             ImGui::End();
         }
@@ -186,7 +190,7 @@ int main(int argc, char** args)
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
         SDL_RenderPresent(renderer);
     }
-    is_running.store(false, std::memory_order_relaxed);
+    isRunning.store(false, std::memory_order_relaxed);
     _p2p_thread.join();
     _connection_server_thread.detach();
 

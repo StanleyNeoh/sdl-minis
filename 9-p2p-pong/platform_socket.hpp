@@ -128,6 +128,11 @@ struct SocketResource {
 		return ::listen(_socket, nconn);
 	}
 
+	int getsockname(sockaddr_in& address) {
+		socklen_t socklen = sizeof(address);
+		return ::getsockname(_socket, sockaddr_cast(&address), &socklen);
+	}
+
 	SocketResource accept(sockaddr_in& address) {
 		socklen_t socklen = sizeof(address);
 		SocketResource client(::accept(_socket, sockaddr_cast(&address), &socklen));

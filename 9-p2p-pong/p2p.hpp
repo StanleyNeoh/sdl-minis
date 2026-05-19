@@ -32,6 +32,7 @@ namespace P2P {
         in_addr_t address = 0;
         time_t timestamp = 0;
 
+        LocData(in_addr_t address, in_port_t port, std::string_view name): LocPacket(port, name), address(address) {}
         LocData(LocPacket& packet, in_addr_t address): 
             LocPacket(packet), 
             address(address), 
@@ -46,9 +47,17 @@ namespace P2P {
         }
     };
 
+    inline std::ostream& operator<<(std::ostream& o, const P2P::LocData& locData) {
+        char clientIp[INET_ADDRSTRLEN] = {0};
+        inet_ntop(AF_INET, &locData.address, clientIp, sizeof(clientIp));
+        o << clientIp << ":" << locData.port;
+        return o;
+    }
+
+
     struct Config {
-        std::atomic<bool>* is_running;
-        std::atomic<GameState>* curr_state;
+        std::atomic<bool>* isRunning;
+        std::atomic<GameState>* currState;
         std::string_view name;
         in_port_t tcpPort;
         in_port_t udpPort = 12345;
@@ -57,6 +66,18 @@ namespace P2P {
 
     std::shared_mutex neighbour_ips_mut;
     std::vector<std::unique_ptr<LocData>> neighbour_ips;
+
+    in_addr_t own_ip_address() {
+        SocketResource socketResource(AF_INET, SOCK_DGRAM, 0);
+        sockaddr_in addr = create_sockaddr(INADDR_LOOPBACK, 123);
+        socketResource.connect(addr);
+
+        sockaddr_in local;
+        if (socketResource.getsockname(local)) {
+            return INADDR_ANY;
+        }
+        return local.sin_addr.s_addr;
+    }
 
     void upsert_neighbour(const LocData& recvloc) {
         std::unique_lock _lock(neighbour_ips_mut);
@@ -116,8 +137,8 @@ namespace P2P {
         sockaddr_in broadcastAddress = create_sockaddr(INADDR_BROADCAST, config.udpPort);
         sockaddr_in senderAddress;
         socklen_t addressSize = sizeof(senderAddress);
-        while (config.is_running->load(std::memory_order_relaxed)) {
-            myloc.state = config.curr_state->load(std::memory_order_relaxed);
+        while (config.isRunning->load(std::memory_order_relaxed)) {
+            myloc.state = config.currState->load(std::memory_order_relaxed);
             ssize_t n = sendto(socketResource, &myloc, sizeof(myloc), 0, sockaddr_cast(&broadcastAddress), sizeof(broadcastAddress));
             logger.log("Sending UDP n = ", n, " to broadcast port ", config.udpPort, ". Error: ", socket_error());
 
@@ -151,6 +172,5 @@ struct std::hash<P2P::LocData> {
         return locData.id();
     }
 };
-
 
 #endif

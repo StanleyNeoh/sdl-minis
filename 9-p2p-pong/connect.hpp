@@ -19,14 +19,14 @@ namespace Connection {
             return;
         }
 
-        curr_state.store(GameState_InGame, std::memory_order_release);
+        currState.store(GameState_InGame, std::memory_order_release);
         int alive = 1;
         if (is_master) {
             ssize_t nbytes = send(socketResource, &alive, sizeof(alive), 0);
             logger.log("Sending first heartbeat ", nbytes);
         }
 
-        while (curr_state.load(std::memory_order_acquire) == GameState_InGame) {
+        while (currState.load(std::memory_order_acquire) == GameState_InGame) {
             ssize_t nbytes = recv(socketResource, &alive, sizeof(alive), 0);
             if (nbytes <= 0) {
                 logger.log("Socket is dead. Breaking.");
@@ -38,7 +38,7 @@ namespace Connection {
             nbytes = send(socketResource, &alive, sizeof(alive), 0);
             logger.log("Sending next heartbeat ", nbytes);
         }
-        curr_state.store(GameState_Available, std::memory_order_release);
+        currState.store(GameState_Available, std::memory_order_release);
         logger.log("Closing heartbeat");
     };
 
@@ -90,8 +90,8 @@ namespace Connection {
         }
         logger.log("Listening for connections");
 
-        curr_state.store(GameState_Available, std::memory_order_relaxed);
-        while (is_running.load(std::memory_order_relaxed)) {
+        currState.store(GameState_Available, std::memory_order_relaxed);
+        while (isRunning.load(std::memory_order_relaxed)) {
             sockaddr_in clientAddr;
             SocketResource clientResource = socketResource.accept(clientAddr);
             if (!clientResource.is_available()) {
