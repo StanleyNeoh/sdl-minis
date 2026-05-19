@@ -13,7 +13,7 @@ enum GameState {
     GameState_InGame,
 };
 
-std::atomic<bool> is_running;
+std::atomic<bool> is_running = true;
 std::atomic<GameState> curr_state;
 std::shared_mutex neighbour_ips_mut;
 std::unordered_map<size_t, LocData> neighbour_ips;

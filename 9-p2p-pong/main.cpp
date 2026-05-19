@@ -22,7 +22,8 @@ int main(int argc, char** args)
     }
     int tcpPort = std::stoi(args[1]);
     std::string_view name = args[2];
-    SearchThreads search_thread(12345, tcpPort, name);
+    std::thread _p2p_thread(p2p_thread, 12345, tcpPort, name, 10);
+    _p2p_thread.detach();
     std::thread _tcp_server_thread(tcp_server_thread, tcpPort);
     _tcp_server_thread.detach();
 

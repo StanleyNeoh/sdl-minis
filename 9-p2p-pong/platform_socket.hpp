@@ -107,7 +107,8 @@ struct SocketResource {
 		return _socket;
 	}
 
-	int setsockopt(int opt_name, int opt_val) {
+	template <typename T>
+	int setsockopt(int opt_name, const T& opt_val) {
 		if (!is_available()) return -1;
 		return ::setsockopt(_socket, SOL_SOCKET, opt_name, &opt_val, sizeof(opt_val));
 	}
