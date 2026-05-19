@@ -49,8 +49,8 @@ namespace P2P {
     struct Config {
         std::atomic<bool>* is_running;
         std::string_view name;
-        int tcpPort;
-        int udpPort = 12345;
+        in_port_t tcpPort;
+        in_port_t udpPort = 12345;
         int loop_interval = 1;
     };
 

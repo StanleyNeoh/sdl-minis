@@ -24,15 +24,15 @@ int main(int argc, char** args)
         logger.log("Help: prog <tcp_port> <name>");
         return 0;
     }
-    int tcpPort = std::stoi(args[1]);
+    in_port_t tcpPort = static_cast<in_port_t>(std::stoi(args[1]));
     std::thread _p2p_thread(P2P::main, P2P::Config{
         .is_running = &is_running,
         .name = args[2],
         .tcpPort = tcpPort
     });
-
-    std::thread _tcp_server_thread(tcp_server_thread, tcpPort);
-    _tcp_server_thread.detach();
+    std::thread _connection_server_thread(Connection::server, Connection::Config{
+        .tcpPort = tcpPort
+    });
 
     // Setup SDL
     #ifdef _WIN32
@@ -119,6 +119,7 @@ int main(int argc, char** args)
         ImGui::NewFrame();
 
         ImGui::Begin("LAN Users");
+        ImGui::Text("User: %s", args[2]);
         if (ImGui::BeginTable("neighbour_table", 3, ImGuiTableFlags_Borders, ImVec2(-FLT_MIN, 0.0))) {
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthStretch, 3.0f);
@@ -139,7 +140,7 @@ int main(int argc, char** args)
                     ImGui::PushID(p->id());
                     if (ImGui::Button("Connect", ImVec2{cellWidth, 20.0f})) {
                         logger.log("Click ", clientIp, ": ", p->port);
-                        invite_user(*p.get());
+                        Connection::connect_user(*p.get());
                     }
                     ImGui::PopID();
                 }
@@ -168,6 +169,7 @@ int main(int argc, char** args)
     }
     is_running.store(false, std::memory_order_relaxed);
     _p2p_thread.join();
+    _connection_server_thread.detach();
 
     // Cleanup
     ImGui_ImplSDLRenderer2_Shutdown();
