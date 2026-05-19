@@ -12,12 +12,14 @@
 #include "globals.hpp"
 #include "p2p.hpp"
 #include "connect.hpp"
+#include "logger.hpp"
 
 // Main code
 int main(int argc, char** args)
 {
+    Logger logger("Main");
     if (argc != 3) {
-        std::cout << "Help: prog <tcp_port> <name>\n";
+        logger.log("Help: prog <tcp_port> <name>");
         return 0;
     }
     int tcpPort = std::stoi(args[1]);
@@ -33,7 +35,7 @@ int main(int argc, char** args)
     #endif
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
     {
-        printf("Error: %s\n", SDL_GetError());
+        logger.log("Error: ", SDL_GetError());
         return 1;
     }
 
@@ -48,18 +50,18 @@ int main(int argc, char** args)
     SDL_Window* window = SDL_CreateWindow("Pong", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, (int)(1280 * main_scale), (int)(800 * main_scale), window_flags);
     if (window == nullptr)
     {
-        printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
+        logger.log("Error: SDL_CreateWindow(): ", SDL_GetError());
         return 1;
     }
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
     if (renderer == nullptr)
     {
-        SDL_Log("Error creating SDL_Renderer!");
+        logger.log("Error creating SDL_Renderer!");
         return 1;
     }
     SDL_RendererInfo info;
     SDL_GetRendererInfo(renderer, &info);
-    SDL_Log("Current SDL_Renderer: %s", info.name);
+    logger.log("Current SDL_Renderer: ", info.name);
 
 
     // Setup Dear ImGui context
@@ -131,7 +133,7 @@ int main(int argc, char** args)
                     float cellWidth = ImGui::GetContentRegionAvail().x;
                     ImGui::PushID(p.second.id());
                     if (ImGui::Button("Connect", ImVec2{cellWidth, 20.0f})) {
-                        std::cout << "Click " << clientIp << ":" << p.second.port << "\n";
+                        logger.log("Click ", clientIp, ": ", p.second.port);
                         invite_user(p.second);
                     }
                     ImGui::PopID();
@@ -145,7 +147,7 @@ int main(int argc, char** args)
             ImGui::Begin("Game on");
             ImGui::Text("Game has started");
             if (ImGui::Button("Disconnect", ImVec2{30.0f, 10.0f})) {
-                std::cout << "Disconnecting TCP\n";
+                logger.log("Disconnecting TCP");
                 curr_state.store(GameState_Available, std::memory_order_release);
             }
             ImGui::End();

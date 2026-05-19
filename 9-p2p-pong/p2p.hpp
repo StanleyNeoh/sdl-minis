@@ -11,30 +11,32 @@
 #include "platform_socket.hpp"
 #include "globals.hpp"
 #include "locdata.hpp"
+#include "logger.hpp"
 
 void p2p_thread(int udpPort, int tcpPort, std::string_view name, int loop_interval) {
-    std::cout << "Starting p2p thread\n";
+    Logger logger("P2P");
+    logger.log("Starting p2p thread");
     LocData myloc(tcpPort, name);
     SocketResource socketResource(AF_INET, SOCK_DGRAM, 0);
     if (!socketResource.is_available()) {
-        std::cerr << "Failed to create UDP socket: " << socket_error() << "\n";
+        logger.log("Failed to create UDP socket: ", socket_error());
         return;
     } 
     if (socketResource.setsockopt(SO_BROADCAST, 1)) {
-        std::cout << "Failed to set SO_BROADCAST: " << socket_error() << "\n";
+        logger.log("Failed to set SO_BROADCAST: ", socket_error());
         return;
     }
     if (socketResource.setsockopt(SO_REUSEPORT, 1)) {
-        std::cout << "Failed to set SO_REUSEPORT: " << socket_error() << "\n";
+        logger.log("Failed to set SO_REUSEPORT: ", socket_error());
         return;
     }
     if (socketResource.setsockopt(SO_RCVTIMEO, timeval{.tv_sec = 1, .tv_usec = 0})) {
-        std::cout << "Failed to set SO_RECVTIMEO: " << socket_error() << "\n";
+        logger.log("Failed to set SO_RECVTIMEO: ", socket_error());
         return;
     }
     sockaddr_in listenAddress = create_sockaddr(INADDR_ANY, udpPort);
     if (socketResource.bind(listenAddress)) {
-        std::cout << "Failed to bind listen address: " << socket_error() << "\n";
+        logger.log("Failed to bind listen address: ", socket_error());
         return;
     }
 
@@ -45,10 +47,9 @@ void p2p_thread(int udpPort, int tcpPort, std::string_view name, int loop_interv
     while (is_running.load(std::memory_order_relaxed)) {
         myloc.refresh(curr_state.load(std::memory_order_acquire));
         ssize_t n = sendto(socketResource, &myloc, sizeof(myloc), 0, sockaddr_cast(&broadcastAddress), sizeof(broadcastAddress));
-        std::cout << "Sending UDP n = " << n << " to broadcast port " << udpPort << ". Error: " << socket_error() <<"\n";
+        logger.log("Sending UDP n = ", n, " to broadcast port ", udpPort, ". Error: ", socket_error());
         n = recvfrom(socketResource, &recvloc, sizeof(recvloc), 0, sockaddr_cast(&senderAddress), &addressSize);
-        std::cout << "Received UDP n = " << n << " to broadcast port " << udpPort << ". Error: " << socket_error() << "\n";
-
+        logger.log("Received UDP n = ", n, " to broadcast port ", udpPort, ". Error: ", socket_error());
         if (n >= 0) {
             recvloc.address = senderAddress.sin_addr.s_addr;
             std::unique_lock lock(neighbour_ips_mut);
@@ -65,7 +66,7 @@ void p2p_thread(int udpPort, int tcpPort, std::string_view name, int loop_interv
         }
         std::this_thread::sleep_for(std::chrono::seconds(loop_interval));
     }
-    std::cout << "Closed p2p thread\n";
+    logger.log("Closed p2p thread");
 }
 
 #endif

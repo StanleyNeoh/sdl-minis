@@ -5,51 +5,54 @@
 #include <thread>
 #include "locdata.hpp"
 #include "platform_socket.hpp"
+#include "logger.hpp"
 
-void connection_thread(SocketResource clientSocket, bool is_master) {
-    if (!clientSocket.is_available()) {
-        std::cout << "[Connection] clientsocket was not initialised\n";
+void connection_thread(SocketResource socketResource, bool is_master) {
+    Logger logger("Connection");
+    if (!socketResource.is_available()) {
+        logger.log("socketResource was not initialised");
         return;
     }
 
     curr_state.store(GameState_InGame, std::memory_order_release);
     int alive = 1;
     if (is_master) {
-        ssize_t nbytes = send(clientSocket, &alive, sizeof(alive), 0);
-        std::cout << "[Connection] Master sending first: " << nbytes << "\n";
+        ssize_t nbytes = send(socketResource, &alive, sizeof(alive), 0);
+        logger.log("Sending first heartbeat ", nbytes);
     }
 
     while (curr_state.load(std::memory_order_acquire) == GameState_InGame) {
-        ssize_t nbytes = recv(clientSocket, &alive, sizeof(alive), 0);
+        ssize_t nbytes = recv(socketResource, &alive, sizeof(alive), 0);
         if (nbytes == 0) {
-            std::cout << "[Connection] Socket is dead. breaking\n";
+            logger.log("Socket is dead. Breaking.");
             break;
         } else {
-            std::cout << "[Connection] Recved " << nbytes << "\n";
+            logger.log("Recved heartbeat ", nbytes);
         }
         std::this_thread::sleep_for(std::chrono::seconds(5));
-        nbytes = send(clientSocket, &alive, sizeof(alive), 0);
-        std::cout << "[Connection] Sending next...: " << nbytes << "\n";
+        nbytes = send(socketResource, &alive, sizeof(alive), 0);
+        logger.log("Sending next heartbeat ", nbytes);
     }
     curr_state.store(GameState_Available, std::memory_order_release);
-    std::cout << "[Connection] Closing tcp\n";
+    logger.log("Closing heartbeat");
 };
 
 int invite_user(const LocData& locdata) {
+    Logger logger("Invite");
     SocketResource socketResource(AF_INET, SOCK_STREAM, 0);
     if (!socketResource.is_available()) {
-        std::cout << "[Invite] Failed to create socket " << socket_error() << "\n";
+        logger.log("Failed to create socket ", socket_error());
         return -1;
     }
 
     if (socketResource.setsockopt(SO_REUSEADDR, 1)) {
-        std::cout << "[Invite] Failed to set socket to be reusable\n";
+        logger.log("Failed to set socket to be reusable");
         return -1;
     }
 
     sockaddr_in serverAddress = create_sockaddr(locdata.address, locdata.port);
     if (socketResource.connect(serverAddress)) {
-        std::cout << "[Invite] Failed to connect to tcp server: " << errno << "\n";
+        logger.log("Failed to connect to tcp server: ", socket_error());
         return -1;
     }
 
@@ -59,34 +62,35 @@ int invite_user(const LocData& locdata) {
 }
 
 int tcp_server_thread(int tcpPort) {
+    Logger logger("TCP");
     SocketResource socketResource(AF_INET, SOCK_STREAM, 0);
     if (!socketResource.is_available()) {
-        std::cout << "[TCP] Failed to create socket: " << socket_error() << "\n";
+        logger.log("Failed to create socket ", socket_error());
         return -1;
     }
     if (socketResource.setsockopt(SO_REUSEADDR, 1)) {
-        std::cout << "[TCP] Failed to set socket to be reusable\n";
+        logger.log("Failed to set socket to be reusable ", socket_error());
         return -1;
     }
 
     sockaddr_in serverAddr = create_sockaddr(INADDR_ANY, tcpPort);
     if (socketResource.bind(serverAddr)) {
-        std::cout << "[TCP] Failed to bind sever to port\n";
+        logger.log("Failed to bind sever to port", socket_error());
         return -1;
     }
     
     if (socketResource.listen(1)) {
-        std::cout << "[TCP] Failed to prepare serversocket to listen\n";
+        logger.log("Failed to prepare serversocket to listen", socket_error());
         return -1;
     }
-    std::cout << "[TCP] Listening for connections\n";
+    logger.log("Listening for connections");
 
     curr_state.store(GameState_Available, std::memory_order_relaxed);
     while (is_running.load(std::memory_order_relaxed)) {
         sockaddr_in clientAddr;
         SocketResource clientResource = socketResource.accept(clientAddr);
         if (!clientResource.is_available()) {
-            std::cout << "[TCP] Accept failed: " << errno << "\n";
+            logger.log("Accept failed ", socket_error());
             continue;
         }
         connection_thread(std::move(clientResource), true);
