@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string_view>
 
+template <bool Debug = true>
 struct Logger {
     std::ostream& out;
     std::string_view prefix;
@@ -12,9 +13,11 @@ struct Logger {
 
     template <typename... Args>
     void log(Args&&... args) {
-        // out << "[" << prefix << "] ";
-        // (out << ... << std::forward<Args>(args));
-        // out << "\n";
+        if constexpr (Debug) {
+            out << "[" << prefix << "] ";
+            (out << ... << std::forward<Args>(args));
+            out << "\n";
+        }
     }
 };
 

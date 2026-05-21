@@ -169,5 +169,15 @@ in_addr_t own_ip_address() {
 	return local.sin_addr.s_addr;
 }
 
+std::ostream& operator<<(std::ostream& o, const sockaddr_in& addr) {
+	char address[INET_ADDRSTRLEN] = {0};
+	inet_ntop(AF_INET, &addr.sin_addr.s_addr, address, sizeof(address));
+	o << address << ":" << ntohs(addr.sin_port);
+	return o;
+}
+
+inline bool operator==(const sockaddr_in& addr1, const sockaddr_in& addr2) {
+	return addr1.sin_addr.s_addr == addr2.sin_addr.s_addr && addr1.sin_port == addr2.sin_port;
+}
 
 #endif

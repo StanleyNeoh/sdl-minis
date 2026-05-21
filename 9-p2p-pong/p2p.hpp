@@ -92,7 +92,7 @@ namespace P2P {
     }
 
     void main(Config config) {
-        Logger logger("P2P");
+        Logger<false> logger("P2P");
         logger.log("Starting p2p thread");
         SocketResource socketResource(AF_INET, SOCK_DGRAM, 0);
         if (!socketResource.is_available()) {

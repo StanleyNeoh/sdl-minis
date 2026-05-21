@@ -161,7 +161,7 @@ int main(int argc, char** args)
                     ImGui::PushID(p->id());
                     ImGui::BeginDisabled(p->state != AppState_Available || *p.get() == myloc);
                     if (ImGui::Button("Connect", ImVec2{cellWidth, 20.0f})) {
-                        logger.log("Click ", ss.str(), ": ", p->port);
+                        logger.log("Click ", ss.str());
                         Connection::connect_user(conn_config, *p.get());
                     }
                     ImGui::EndDisabled();
@@ -192,7 +192,7 @@ int main(int argc, char** args)
     }
     currState.store(AppState_Closed, std::memory_order_relaxed);
     _p2p_thread.join();
-    _connection_server_thread.detach();
+    _connection_server_thread.join();
 
     // Cleanup
     ImGui_ImplSDLRenderer2_Shutdown();
