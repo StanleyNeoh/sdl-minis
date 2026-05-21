@@ -5,14 +5,13 @@
 #include <atomic>
 #include <unordered_map>
 
-enum GameState {
-    GameState_Uninitialised,
-    GameState_Available,
-    GameState_InGame,
-    GameState_Closed,
+enum AppState {
+    AppState_Uninitialised,
+    AppState_Available,
+    AppState_InGame,
+    AppState_Closed,
 };
 
-std::atomic<bool> isRunning = true;
-std::atomic<GameState> currState = GameState_Uninitialised;
+std::atomic<AppState> currState = AppState_Uninitialised;
 
 #endif

@@ -12,9 +12,9 @@ struct Logger {
 
     template <typename... Args>
     void log(Args&&... args) {
-        out << "[" << prefix << "] ";
-        (out << ... << std::forward<Args>(args));
-        out << "\n";
+        // out << "[" << prefix << "] ";
+        // (out << ... << std::forward<Args>(args));
+        // out << "\n";
     }
 };
 

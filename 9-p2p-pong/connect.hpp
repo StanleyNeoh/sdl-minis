@@ -7,70 +7,107 @@
 #include "platform_socket.hpp"
 #include "logger.hpp"
 #include "p2p.hpp"
+#include <SDL.h>
+#include <atomic>
+#include <chrono>
+
+// UDP to establish game connection
+// Every application maintains a server thread which listens for udp packets on gamePort.
+//  - gamePort and host_ip was published on p2p module for other hosts on same network
+// To start a game with another host, send a game invite to gamePort of the other host
+//  - Create a new thread to listen to replies of invitation
+// Other host will send back whether it accepts
+// If accepts game proceeds
 
 namespace Connection {
     struct Config {
-        std::atomic<GameState>* currState;
-        in_port_t tcpPort;
+        std::atomic<AppState>* currState;
+        in_port_t gamePort;
     };
 
-    void main(SocketResource socketResource, bool is_master) {
-        Logger logger("Connection");
-        if (!socketResource.is_available()) {
-            logger.log("socketResource was not initialised");
-            return;
-        }
+    enum PacketStatus {
+        PACKET_UNINITIALISED,
+        PACKET_INVITATION_NEW,
+        PACKET_INVITATION_ACCEPTED,
+        PACKET_HEARTBEAT,
+        PACKET_EVENT,
+    };
 
-        currState.store(GameState_InGame, std::memory_order_release);
-        int alive = 1;
-        if (is_master) {
-            ssize_t nbytes = socketResource.send(&alive, sizeof(alive));
-            logger.log("Sending first heartbeat ", nbytes);
-        }
+    struct Packet {
+        PacketStatus status = PACKET_UNINITIALISED;
+    };
 
-        while (currState.load(std::memory_order_acquire) == GameState_InGame) {
-            ssize_t nbytes = socketResource.recv(&alive, sizeof(alive));
-            if (nbytes <= 0) {
-                logger.log("Socket is dead. Breaking.");
-                break;
-            } else {
-                logger.log("Recved heartbeat ", nbytes);
+    constexpr double TIMEOUT_DURATION_S = 10;
+    constexpr time_t TIMEOUT_CHECK_S = 1;
+
+    void connection_loop(SocketResource& socketResource, const sockaddr_in& oppAddress) {
+        Logger logger("Connection Loop");
+        // 2. Begin game
+        Packet heartBeat{.status = PACKET_HEARTBEAT};
+        while (true) {
+            Packet packet; sockaddr_in senderAddress;
+            ssize_t n = socketResource.recvfrom(&packet, sizeof(packet), senderAddress);
+            if (n < 0) {
+                socketResource.sendto(&heartBeat, sizeof(heartBeat), oppAddress);
+                continue;
             }
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-            nbytes = socketResource.send(&alive, sizeof(alive));
-            logger.log("Sending next heartbeat ", nbytes);
+            if (memcmp(&senderAddress, &oppAddress, sizeof(senderAddress)) != 0) continue;
+            logger.log("Received packet");
         }
-        currState.store(GameState_Available, std::memory_order_release);
-        logger.log("Closing heartbeat");
-    };
+    }
 
-    int connect_user(const P2P::LocData& locdata) {
-        Logger logger("Invite");
-        SocketResource socketResource(AF_INET, SOCK_STREAM, 0);
+
+    void client(SocketResource socketResource, sockaddr_in oppAddress) {
+        Logger logger("Client");
+        time_t last_time = curr_time();
+        // 1. Wait for accept from server
+        while (true) {
+            Packet packet; sockaddr_in senderAddress;
+            ssize_t n = socketResource.recvfrom(&packet, sizeof(packet), senderAddress);
+            time_t now = curr_time();
+            if (std::difftime(now, last_time) > TIMEOUT_DURATION_S) return;
+            if (n < 0) continue;
+            if (packet.status == PACKET_INVITATION_ACCEPTED && (memcmp(&senderAddress, &oppAddress, sizeof(senderAddress)) == 0)) break;
+        }
+
+        // Begin game
+        connection_loop(socketResource, oppAddress);
+    }
+
+    int connect_user(const Config& config, const P2P::LocData& locdata) {
+        Logger logger("Connect User");
+        SocketResource socketResource(AF_INET, SOCK_DGRAM, 0);
         if (!socketResource.is_available()) {
             logger.log("Failed to create socket ", socket_error());
             return -1;
         }
-
         if (socketResource.setsockopt(SO_REUSEADDR, 1)) {
             logger.log("Failed to set socket to be reusable");
             return -1;
         }
-
+        if (socketResource.setsockopt(SO_RCVTIMEO, timeval{.tv_sec=TIMEOUT_CHECK_S, .tv_usec=0})) {
+            logger.log("Failed to set socket to be reusable");
+            return -1;
+        }
+        sockaddr_in listenAddress = create_sockaddr(INADDR_ANY, config.gamePort);
+        if (socketResource.bind(listenAddress)) {
+            logger.log("Failed to bind to listen address");
+            return -1;
+        }
+        Packet packet{.status = PACKET_INVITATION_NEW};
         sockaddr_in serverAddress = create_sockaddr(locdata.address, locdata.port);
-        if (socketResource.connect(serverAddress)) {
+        if (socketResource.sendto(&packet, sizeof(packet), serverAddress)) {
             logger.log("Failed to connect to tcp server: ", socket_error());
             return -1;
         }
-
-        std::thread _conn_thread(main, std::move(socketResource), false);
-        _conn_thread.detach();
+        std::thread client_thread(client, std::move(socketResource), std::move(serverAddress));
+        client_thread.detach();
         return -1;
     }
 
     int server(Config config) {
         Logger logger("Server");
-        SocketResource socketResource(AF_INET, SOCK_STREAM, 0);
+        SocketResource socketResource(AF_INET, SOCK_DGRAM, 0);
         if (!socketResource.is_available()) {
             logger.log("Failed to create socket ", socket_error());
             return -1;
@@ -79,29 +116,45 @@ namespace Connection {
             logger.log("Failed to set socket to be reusable ", socket_error());
             return -1;
         }
-
-        sockaddr_in serverAddr = create_sockaddr(INADDR_ANY, config.tcpPort);
+        if (socketResource.setsockopt(SO_RCVTIMEO, timeval{.tv_sec=TIMEOUT_CHECK_S, .tv_usec=0})) {
+            logger.log("Failed to set socket to be reusable ", socket_error());
+            return -1;
+        }
+        sockaddr_in serverAddr = create_sockaddr(INADDR_ANY, config.gamePort);
         if (socketResource.bind(serverAddr)) {
             logger.log("Failed to bind sever to port", socket_error());
             return -1;
         }
-        
-        if (socketResource.listen(1)) {
-            logger.log("Failed to prepare serversocket to listen", socket_error());
-            return -1;
-        }
+        config.currState->store(AppState_Available, std::memory_order_release);
         logger.log("Listening for connections");
 
-        currState.store(GameState_Available, std::memory_order_release);
-        while (isRunning.load(std::memory_order_relaxed)) {
-            sockaddr_in clientAddr;
-            SocketResource clientResource = socketResource.accept(clientAddr);
-            if (!clientResource.is_available()) {
-                logger.log("Accept failed ", socket_error());
-                continue;
+        time_t last_time = curr_time();
+        bool pending_accept = false;
+        sockaddr_in oppAddress;
+        while (config.currState->load(std::memory_order_relaxed)) {
+            Packet packet; sockaddr_in clientAddr;
+            ssize_t n = socketResource.recvfrom(&packet, sizeof(packet), clientAddr);
+            time_t now = curr_time();
+            if (pending_accept && std::difftime(now, last_time) > TIMEOUT_DURATION_S) {
+                pending_accept = false;
             }
-            if (currState.load(std::memory_order_acquire) == GameState_Available) {
-                main(std::move(clientResource), true);
+            if (n <= 0) continue;
+
+            switch (packet.status) {
+            case PACKET_INVITATION_NEW:
+                if (pending_accept) break;
+                pending_accept = true;
+                last_time = now;
+                oppAddress = clientAddr;
+                packet.status = PACKET_INVITATION_ACCEPTED;
+                n = socketResource.sendto(&packet, sizeof(packet), clientAddr);
+                break;
+            case PACKET_INVITATION_ACCEPTED: 
+                // Game begin
+                connection_loop(socketResource, oppAddress);
+                break;
+            default:
+                break;
             }
         }
         return 0;

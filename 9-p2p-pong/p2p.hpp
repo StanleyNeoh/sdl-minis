@@ -12,13 +12,12 @@
 #include "platform_socket.hpp"
 #include "globals.hpp"
 #include "logger.hpp"
+#include "utils.hpp"
 
 namespace P2P {
-    using Clock = std::chrono::system_clock;
-
     struct LocPacket {
         in_port_t port = 0;
-        GameState state = GameState_Available;
+        AppState state = AppState_Available;
         char name[32] = {0};
 
         LocPacket() = default;
@@ -30,13 +29,12 @@ namespace P2P {
 
     struct LocData: LocPacket {
         in_addr_t address = 0;
-        time_t timestamp = 0;
 
+        LocData() = default;
         LocData(in_addr_t address, in_port_t port, std::string_view name): LocPacket(port, name), address(address) {}
         LocData(LocPacket& packet, in_addr_t address): 
             LocPacket(packet), 
-            address(address), 
-            timestamp(Clock::to_time_t(Clock::now())) {}
+            address(address) {}
 
         bool operator==(const LocData& other) const {
             return address == other.address && port == other.port;
@@ -55,28 +53,15 @@ namespace P2P {
     }
 
     struct Config {
-        std::atomic<bool>* isRunning;
-        std::atomic<GameState>* currState;
+        std::atomic<AppState>* currState;
         std::string_view name;
-        in_port_t tcpPort;
+        in_port_t gamePort;
         in_port_t udpPort = 12345;
         int loop_interval = 1;
     };
 
     std::shared_mutex neighbour_ips_mut;
     std::vector<std::unique_ptr<LocData>> neighbour_ips;
-
-    in_addr_t own_ip_address() {
-        SocketResource socketResource(AF_INET, SOCK_DGRAM, 0);
-        sockaddr_in addr = create_sockaddr(INADDR_LOOPBACK, 123);
-        socketResource.connect(addr);
-
-        sockaddr_in local;
-        if (socketResource.getsockname(local)) {
-            return INADDR_ANY;
-        }
-        return local.sin_addr.s_addr;
-    }
 
     void upsert_neighbour(const LocData& recvloc) {
         std::unique_lock _lock(neighbour_ips_mut);
@@ -132,11 +117,11 @@ namespace P2P {
             return;
         }
 
-        LocPacket myloc(config.tcpPort, config.name);
+        LocPacket myloc(config.gamePort, config.name);
         sockaddr_in broadcastAddress = create_sockaddr(INADDR_BROADCAST, config.udpPort);
         sockaddr_in senderAddress;
         socklen_t addressSize = sizeof(senderAddress);
-        while (config.isRunning->load(std::memory_order_relaxed)) {
+        while (config.currState->load(std::memory_order_relaxed) != AppState_Closed) {
             myloc.state = config.currState->load(std::memory_order_relaxed);
             ssize_t n = socketResource.sendto(&myloc, sizeof(myloc), broadcastAddress);
             logger.log("Sending UDP n = ", n, " to broadcast port ", config.udpPort, ". Error: ", socket_error());
@@ -149,7 +134,7 @@ namespace P2P {
 
                 LocData recvloc(recvPac, senderAddress.sin_addr.s_addr);
                 switch (recvloc.state) {
-                    case GameState_Closed:
+                    case AppState_Closed:
                         delete_neighbour(recvloc);
                         break;
                     default:
@@ -159,7 +144,7 @@ namespace P2P {
             }
         }
 
-        myloc.state = GameState_Closed;
+        myloc.state = AppState_Closed;
         ssize_t n = socketResource.sendto(&myloc, sizeof(myloc), broadcastAddress);
         logger.log("Closed p2p thread");
     }

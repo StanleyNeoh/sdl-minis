@@ -138,7 +138,8 @@ struct SocketResource {
 	}
 
 	int recvfrom(void* buf, size_t buf_size, sockaddr_in& address, int flags = 0) {
-		return ::recvfrom(_socket, buf, buf_size, flags, sockaddr_cast(addr), sizeof(address));
+		socklen_t socklen = sizeof(address);
+		return ::recvfrom(_socket, buf, buf_size, flags, sockaddr_cast(&address), &socklen);
 	}
 
 	int send(const void* buf, size_t buf_size, int flags = 0) {
@@ -155,6 +156,18 @@ struct SocketResource {
 		return client;
 	}
 };
+
+in_addr_t own_ip_address() {
+	SocketResource socketResource(AF_INET, SOCK_DGRAM, 0);
+	sockaddr_in addr = create_sockaddr(INADDR_LOOPBACK, 123);
+	socketResource.connect(addr);
+
+	sockaddr_in local;
+	if (socketResource.getsockname(local)) {
+		return INADDR_ANY;
+	}
+	return local.sin_addr.s_addr;
+}
 
 
 #endif

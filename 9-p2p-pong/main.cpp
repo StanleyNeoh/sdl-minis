@@ -15,7 +15,6 @@
 #include "p2p.hpp"
 #include "connect.hpp"
 #include "logger.hpp"
-#include "p2p.hpp"
 
 // Main code
 int main(int argc, char** args)
@@ -25,18 +24,18 @@ int main(int argc, char** args)
         logger.log("Help: prog <tcp_port> <name>");
         return 0;
     }
-    P2P::LocData myloc(P2P::own_ip_address(), std::stoi(args[1]), args[2]);
+    P2P::LocData myloc(own_ip_address(), std::stoi(args[1]), args[2]);
     logger.log("My IP: ", myloc);
     std::thread _p2p_thread(P2P::main, P2P::Config{
-        .isRunning = &isRunning,
         .currState = &currState,
         .name = myloc.name,
-        .tcpPort = myloc.port
+        .gamePort = myloc.port
     });
-    std::thread _connection_server_thread(Connection::server, Connection::Config{
+    Connection::Config conn_config{
         .currState = &currState,
-        .tcpPort = myloc.port
-    });
+        .gamePort = myloc.port
+    };
+    std::thread _connection_server_thread(Connection::server, conn_config);
 
     // Setup SDL
     #ifdef _WIN32
@@ -142,16 +141,16 @@ int main(int argc, char** args)
                     ImGui::Text("%s", ss.str().data());
                     ImGui::TableSetColumnIndex(2);
                     switch (p->state) {
-                        case GameState_Uninitialised:
+                        case AppState_Uninitialised:
                             ImGui::Text("Uninitialised");
                             break;
-                        case GameState_Available:
+                        case AppState_Available:
                             ImGui::Text("Available");
                             break;
-                        case GameState_InGame:
+                        case AppState_InGame:
                             ImGui::Text("In Game");
                             break;
-                        case GameState_Closed:
+                        case AppState_Closed:
                             ImGui::Text("Closed");
                             break;
                         default:
@@ -160,10 +159,10 @@ int main(int argc, char** args)
                     ImGui::TableSetColumnIndex(3);
                     float cellWidth = ImGui::GetContentRegionAvail().x;
                     ImGui::PushID(p->id());
-                    ImGui::BeginDisabled(p->state != GameState_Available || *p.get() == myloc);
+                    ImGui::BeginDisabled(p->state != AppState_Available || *p.get() == myloc);
                     if (ImGui::Button("Connect", ImVec2{cellWidth, 20.0f})) {
                         logger.log("Click ", ss.str(), ": ", p->port);
-                        Connection::connect_user(*p.get());
+                        Connection::connect_user(conn_config, *p.get());
                     }
                     ImGui::EndDisabled();
                     ImGui::PopID();
@@ -173,12 +172,12 @@ int main(int argc, char** args)
         }
         ImGui::End();
 
-        if (currState.load(std::memory_order_acquire) == GameState_InGame) {
+        if (currState.load(std::memory_order_acquire) == AppState_InGame) {
             ImGui::Begin("Game on");
             ImGui::Text("Game has started");
             if (ImGui::Button("Disconnect", ImVec2{30.0f, 10.0f})) {
                 logger.log("Disconnecting TCP");
-                currState.store(GameState_Available, std::memory_order_release);
+                currState.store(AppState_Available, std::memory_order_release);
             }
             ImGui::End();
         }
@@ -191,7 +190,7 @@ int main(int argc, char** args)
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
         SDL_RenderPresent(renderer);
     }
-    isRunning.store(false, std::memory_order_relaxed);
+    currState.store(AppState_Closed, std::memory_order_relaxed);
     _p2p_thread.join();
     _connection_server_thread.detach();
 
