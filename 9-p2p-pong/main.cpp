@@ -12,7 +12,7 @@
 #include <thread>
 #include "platform_socket.hpp"
 #include "globals.hpp"
-#include "p2p.hpp"
+#include "discover.hpp"
 #include "connect.hpp"
 #include "logger.hpp"
 
@@ -24,16 +24,16 @@ int main(int argc, char** args)
         logger.log("Help: prog <tcp_port> <name>");
         return 0;
     }
-    P2P::LocData myloc(own_ip_address(), std::stoi(args[1]), args[2]);
+    in_port_t gamePort = std::stoi(args[1]);
+    Discover::Loc myloc(create_sockaddr(own_ip_address(), gamePort), args[2]);
     logger.log("My IP: ", myloc);
-    std::thread _p2p_thread(P2P::main, P2P::Config{
-        .currState = &currState,
+    Discover discover(Discover::Config{
         .name = myloc.name,
-        .gamePort = myloc.port
+        .gamePort = gamePort
     });
     Connection::Config conn_config{
         .currState = &currState,
-        .gamePort = myloc.port
+        .gamePort = gamePort
     };
     std::thread _connection_server_thread(Connection::server, conn_config);
 
@@ -130,39 +130,32 @@ int main(int argc, char** args)
             ImGui::TableSetupColumn("Connect", ImGuiTableColumnFlags_WidthFixed, 120.0f);
             ImGui::TableHeadersRow();
             {
-                std::shared_lock lock(P2P::neighbour_ips_mut);
-                for (auto& p: P2P::neighbour_ips) {
+                for (auto& p: discover.getNeighbours()) {
                     std::stringstream ss;
-                    ss << *p.get();
+                    ss << p;
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%s", p->name);
+                    ImGui::Text("%s", p.name);
                     ImGui::TableSetColumnIndex(1);
                     ImGui::Text("%s", ss.str().data());
                     ImGui::TableSetColumnIndex(2);
-                    switch (p->state) {
-                        case AppState_Uninitialised:
-                            ImGui::Text("Uninitialised");
-                            break;
-                        case AppState_Available:
+                    switch (p.state) {
+                        case Discover::Available:
                             ImGui::Text("Available");
                             break;
-                        case AppState_InGame:
-                            ImGui::Text("In Game");
-                            break;
-                        case AppState_Closed:
-                            ImGui::Text("Closed");
+                        case Discover::Unavailable:
+                            ImGui::Text("Unavailable");
                             break;
                         default:
                             break;
                     }
                     ImGui::TableSetColumnIndex(3);
                     float cellWidth = ImGui::GetContentRegionAvail().x;
-                    ImGui::PushID(p->id());
-                    ImGui::BeginDisabled(p->state != AppState_Available || *p.get() == myloc);
+                    ImGui::PushID(p.id());
+                    ImGui::BeginDisabled(p.state != Discover::Available || p == myloc);
                     if (ImGui::Button("Connect", ImVec2{cellWidth, 20.0f})) {
                         logger.log("Click ", ss.str());
-                        Connection::connect_user(conn_config, *p.get());
+                        Connection::connect_user(conn_config, p);
                     }
                     ImGui::EndDisabled();
                     ImGui::PopID();
@@ -191,7 +184,7 @@ int main(int argc, char** args)
         SDL_RenderPresent(renderer);
     }
     currState.store(AppState_Closed, std::memory_order_relaxed);
-    _p2p_thread.join();
+    discover.kill();
     _connection_server_thread.join();
 
     // Cleanup

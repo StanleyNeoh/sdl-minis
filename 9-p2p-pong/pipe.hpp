@@ -14,11 +14,11 @@ struct SPSCQueue {
     alignas(64) std::atomic<size_t> head = 0;
     alignas(64) std::atomic<size_t> tail = 0;
 
-    bool push(const T& item) const noexcept {
+    bool push(const T& item) noexcept {
         size_t t = tail.load(std::memory_order_relaxed);
         size_t h = head.load(std::memory_order_acquire);
         if (t - h == N) return false;
-        buf[t & mask] = item;
+        buffer[t & mask] = item;
         tail.store(t+1, std::memory_order_release);
         return true;
     }
@@ -41,12 +41,12 @@ struct SPSCQueue {
 
     private:
         template <bool CopyValue>
-        bool pop_impl(T* item) const noexcept {
+        bool pop_impl(T* item) noexcept {
             size_t t = tail.load(std::memory_order_acquire);
             size_t h = head.load(std::memory_order_relaxed);
             if (t - h == 0) return false;
             if constexpr (CopyValue) {
-                item = buf[h & mask];
+                *item = buffer[h & mask];
             }
             head.store(h+1, std::memory_order_release);
             return true;

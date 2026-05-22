@@ -6,7 +6,7 @@
 #include "globals.hpp"
 #include "platform_socket.hpp"
 #include "logger.hpp"
-#include "p2p.hpp"
+#include "discover.hpp"
 #include <SDL.h>
 #include <atomic>
 #include <chrono>
@@ -116,38 +116,38 @@ namespace Connection {
         connection_loop(socketResource, oppAddress);
     }
 
-    int connect_user(const Config& config, const P2P::LocData& locdata) {
+    void connect_user(const Config& config, const Discover::Loc& locdata) {
         Logger logger("Connect User");
         SocketResource socketResource(AF_INET, SOCK_DGRAM, 0);
         if (!socketResource.is_available()) {
             logger.log("Failed to create socket ", socket_error());
-            return -1;
+            return;
         }
         if (socketResource.setsockopt(SO_REUSEADDR, 1)) {
             logger.log("Failed to set socket to be reusable");
-            return -1;
+            return;
         }
         if (socketResource.setsockopt(SO_RCVTIMEO, timeval{.tv_sec=TIMEOUT_CHECK_S, .tv_usec=0})) {
             logger.log("Failed to set socket to be reusable");
-            return -1;
+            return;
         }
         sockaddr_in listenAddress = create_sockaddr(INADDR_ANY, config.gamePort);
         if (socketResource.bind(listenAddress)) {
             logger.log("Failed to bind to listen address");
-            return -1;
+            return;
         }
         Packet packet{.status = Packet::INVITATION_NEW};
-        sockaddr_in serverAddress = create_sockaddr(locdata.address, locdata.port);
+        const sockaddr_in& serverAddress = locdata.address;
         ssize_t n = socketResource.sendto(&packet, sizeof(packet), serverAddress);
         if (n < 0) {
             logger.log("Failed to send invite to ", serverAddress);
-            return -1;
+            return;
         } else {
             logger.log("Successfully sent invite to ", serverAddress);
         }
         std::thread client_thread(client, std::move(socketResource), std::move(serverAddress));
         client_thread.detach();
-        return -1;
+        return;
     }
 
     int server(Config config) {

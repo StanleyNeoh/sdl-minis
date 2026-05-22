@@ -59,10 +59,13 @@
 	}
 #endif
 
-sockaddr_in create_sockaddr(in_addr_t addr, in_port_t port) {
+sockaddr_in create_sockaddr(in_addr_t addr, in_port_t port, bool network_endian=false) {
     sockaddr_in socketAddress;
     socketAddress.sin_family = AF_INET;
-    socketAddress.sin_port = htons(port);
+	if (!network_endian) {
+		port = htons(port);
+	}
+    socketAddress.sin_port = port;
     socketAddress.sin_addr.s_addr = addr;
 	return socketAddress;
 }
