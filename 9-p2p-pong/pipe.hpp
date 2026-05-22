@@ -23,19 +23,6 @@ struct SPSCQueue {
         return true;
     }
 
-
-    template <bool CopyValue>
-    bool pop_impl(T* item) const noexcept {
-        size_t t = tail.load(std::memory_order_acquire);
-        size_t h = head.load(std::memory_order_relaxed);
-        if (t - h == 0) return false;
-        if constexpr (CopyValue) {
-            item = buf[h & mask];
-        }
-        head.store(h+1, std::memory_order_release);
-        return true;
-    }
-
     bool pop(T& item) noexcept {
         return pop_impl<true>(&item);
     }
@@ -51,6 +38,20 @@ struct SPSCQueue {
         }
         return cleared;
     }
+
+    private:
+        template <bool CopyValue>
+        bool pop_impl(T* item) const noexcept {
+            size_t t = tail.load(std::memory_order_acquire);
+            size_t h = head.load(std::memory_order_relaxed);
+            if (t - h == 0) return false;
+            if constexpr (CopyValue) {
+                item = buf[h & mask];
+            }
+            head.store(h+1, std::memory_order_release);
+            return true;
+        }
+
 };
 
 template <typename T, std::size_t N = 1024>
@@ -91,23 +92,6 @@ struct MPSCQueue {
         return true;
     }
 
-    template <bool CopyValue>
-    bool pop_impl(T* item) noexcept {
-        std::size_t h = head.load(std::memory_order_relaxed);
-        Slot& slot = buffer[h & mask];
-
-        if (!slot.ready.load(std::memory_order_acquire)) {
-            return false;
-        }
-
-        if constexpr (CopyValue) {
-            *item = slot.value;
-        }
-        slot.ready.store(false, std::memory_order_release);
-        head.store(h + 1, std::memory_order_release);
-        return true;
-    }
-
     bool pop(T& item) noexcept {
         return pop_impl<true>(&item);
     }
@@ -123,6 +107,24 @@ struct MPSCQueue {
         }
         return cleared;
     }
+
+    private:
+        template <bool CopyValue>
+        bool pop_impl(T* item) noexcept {
+            std::size_t h = head.load(std::memory_order_relaxed);
+            Slot& slot = buffer[h & mask];
+
+            if (!slot.ready.load(std::memory_order_acquire)) {
+                return false;
+            }
+
+            if constexpr (CopyValue) {
+                *item = slot.value;
+            }
+            slot.ready.store(false, std::memory_order_release);
+            head.store(h + 1, std::memory_order_release);
+            return true;
+        }
 };
 
 #endif
