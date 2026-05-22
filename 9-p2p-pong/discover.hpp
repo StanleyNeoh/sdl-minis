@@ -74,7 +74,7 @@ struct Discover {
 
     struct Config {
         Loc ownLoc;
-        in_port_t udpPort = 12345;
+        u_int16_t discoverPort = 12345;
         time_t loop_interval = 1;
         double awake_interval = 10;
 
@@ -142,13 +142,13 @@ struct Discover {
             logger.log("Failed to set SO_RECVTIMEO: ", socket_error());
             return;
         }
-        sockaddr_in listenAddress = create_sockaddr(INADDR_ANY, obj->config.udpPort);
+        sockaddr_in listenAddress = create_sockaddr(INADDR_ANY, obj->config.discoverPort);
         if (socketResource.bind(listenAddress)) {
             logger.log("Failed to bind listen address: ", socket_error());
             return;
         }
 
-        sockaddr_in broadcastAddress = create_sockaddr(INADDR_BROADCAST, obj->config.udpPort);
+        sockaddr_in broadcastAddress = create_sockaddr(INADDR_BROADCAST, obj->config.discoverPort);
         sockaddr_in senderAddress;
         LocPacket ownLocPac = obj->config.ownLoc.to_packet();
         LocPacket recvPac;
@@ -174,7 +174,7 @@ struct Discover {
         }
         ownLocPac.state = Closed;
         n = socketResource.sendto(&ownLocPac, sizeof(ownLocPac), broadcastAddress);
-        logger.log("Sending discover closing UDP size = ", n, " to broadcast port ", obj->config.udpPort, ". Error: ", socket_error());
+        logger.log("Sending discover closing UDP size = ", n, " to broadcast port ", obj->config.discoverPort, ". Error: ", socket_error());
         logger.log("Closed dicover io thread");
     }
 
