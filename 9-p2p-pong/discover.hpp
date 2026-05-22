@@ -19,6 +19,7 @@ struct Discover {
     constexpr static size_t MAX_NEIGH = 1024;
     constexpr static size_t MAX_NAME_SIZE = 31;
     enum State {
+        IsHost,
         Available,
         Unavailable,
         Closed
@@ -30,9 +31,14 @@ struct Discover {
         char name[32] = {0};
 
         LocPacket() = default;
-        LocPacket(in_port_t port, std::string_view _name): port(htons(port)) {
+        LocPacket(in_port_t port, std::string_view _name): port(port) {
             _name = _name.substr(0, MAX_NAME_SIZE);
             memcpy(name, _name.data(), _name.size());
+        }
+
+        friend std::ostream& operator<<(std::ostream& o, const LocPacket& locPacket) {
+            o << locPacket.name << "=?:" << ntohs(locPacket.port);
+            return o;
         }
     };
 
@@ -46,31 +52,36 @@ struct Discover {
             _name = _name.substr(0, MAX_NAME_SIZE);
             memcpy(name, _name.data(), _name.size());
         }
-        Loc(LocPacket& packet, in_addr_t address): Loc(create_sockaddr(address, packet.port, true), packet.name, packet.state) {}
+        Loc(const LocPacket& packet, in_addr_t address): Loc(create_sockaddr(address, packet.port, true), packet.name, packet.state) {}
 
         bool operator==(const Loc& other) const {
             return address == other.address;
+        }
+
+        LocPacket to_packet() const {
+            return LocPacket(address.sin_port, name);
         }
 
         size_t id() {
             return address.sin_addr.s_addr << 16 | address.sin_port;
         }
 
-        friend std::ostream& operator<<(std::ostream& o, const Loc& locData) {
-            o << locData.name << "=" << locData.address << "\n";
+        friend std::ostream& operator<<(std::ostream& o, const Loc& loc) {
+            o << loc.name << "=" << loc.address;
             return o;
         }
     };
 
     struct Config {
-        std::string_view name;
-        in_port_t gamePort;
+        Loc ownLoc;
         in_port_t udpPort = 12345;
         time_t loop_interval = 1;
         double awake_interval = 10;
+
+        Config(std::string_view name, u_int16_t port): ownLoc(create_sockaddr(own_ip_address(), port), name) {}
     };
 
-    Config config;
+    const Config config;
     std::shared_mutex neighIpsMut;
     std::array<Loc, MAX_NEIGH> neighIps;
     size_t neighIpsSize = 0;
@@ -139,16 +150,16 @@ struct Discover {
 
         sockaddr_in broadcastAddress = create_sockaddr(INADDR_BROADCAST, obj->config.udpPort);
         sockaddr_in senderAddress;
-        LocPacket myloc(obj->config.gamePort, obj->config.name);
+        LocPacket ownLocPac = obj->config.ownLoc.to_packet();
         LocPacket recvPac;
-        time_t last_send = curr_time();
-        ssize_t n = socketResource.sendto(&myloc, sizeof(myloc), broadcastAddress);
-        logger.log("Sending initial discover UDP size = ", n, " to broadcast port ", obj->config.udpPort, ". Error: ", socket_error());
+        time_t last_send = -1;
+        ssize_t n = socketResource.sendto(&ownLocPac, sizeof(ownLocPac), broadcastAddress);
+        logger.log("Sending initial discover UDP size = ", n, " data = ", ownLocPac);
         while (obj->isRunning.load(std::memory_order_relaxed)) {
             n = socketResource.recvfrom(&recvPac, sizeof(recvPac), senderAddress);
             if (n > 0) {
-                logger.log("Received UDP n = ", n, " to broadcast port ", obj->config.udpPort, ". Error: ", socket_error());
                 Loc receivedLoc(recvPac, senderAddress.sin_addr.s_addr);
+                logger.log("Received ", recvPac, " to ", receivedLoc);
                 Backoff backoff;
                 while (obj->isRunning.load(std::memory_order_relaxed) && !obj->incoming.push(receivedLoc)) {
                     backoff.backoff();
@@ -156,13 +167,13 @@ struct Discover {
             }
             time_t now = curr_time();
             if (std::difftime(now, last_send) > obj->config.awake_interval) {
-                n = socketResource.sendto(&myloc, sizeof(myloc), broadcastAddress);
+                logger.log("Resending discover UDP size data = ", ownLocPac);
+                n = socketResource.sendto(&ownLocPac, sizeof(ownLocPac), broadcastAddress);
                 last_send = now;
-                logger.log("Resending discover UDP size = ", n, " to broadcast port ", obj->config.udpPort, ". Error: ", socket_error());
             }
         }
-        myloc.state = Closed;
-        n = socketResource.sendto(&myloc, sizeof(myloc), broadcastAddress);
+        ownLocPac.state = Closed;
+        n = socketResource.sendto(&ownLocPac, sizeof(ownLocPac), broadcastAddress);
         logger.log("Sending discover closing UDP size = ", n, " to broadcast port ", obj->config.udpPort, ". Error: ", socket_error());
         logger.log("Closed dicover io thread");
     }
@@ -206,6 +217,9 @@ struct Discover {
         std::shared_lock lock(neighIpsMut);
         for (int i = 0; i < neighIpsSize; i++) {
             ret.push_back(neighIps[i]);
+            if (neighIps[i] == config.ownLoc) {
+                ret.back().state = IsHost;
+            }
         }
         return ret;
     }

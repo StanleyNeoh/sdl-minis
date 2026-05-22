@@ -24,13 +24,8 @@ int main(int argc, char** args)
         logger.log("Help: prog <tcp_port> <name>");
         return 0;
     }
-    in_port_t gamePort = std::stoi(args[1]);
-    Discover::Loc myloc(create_sockaddr(own_ip_address(), gamePort), args[2]);
-    logger.log("My IP: ", myloc);
-    Discover discover(Discover::Config{
-        .name = myloc.name,
-        .gamePort = gamePort
-    });
+    u_int16_t gamePort = std::stoi(args[1]);
+    Discover discover(Discover::Config(args[2], gamePort));
     Connection::Config conn_config{
         .currState = &currState,
         .gamePort = gamePort
@@ -122,7 +117,7 @@ int main(int argc, char** args)
         ImGui::NewFrame();
 
         ImGui::Begin("LAN Users");
-        ImGui::Text("User: %s", myloc.name);
+        ImGui::Text("User: %s", discover.config.ownLoc.name);
         if (ImGui::BeginTable("neighbour_table", 4, ImGuiTableFlags_Borders, ImVec2(-FLT_MIN, 0.0))) {
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthStretch, 3.0f);
@@ -140,6 +135,9 @@ int main(int argc, char** args)
                     ImGui::Text("%s", ss.str().data());
                     ImGui::TableSetColumnIndex(2);
                     switch (p.state) {
+                        case Discover::IsHost:
+                            ImGui::Text("Is Host");
+                            break;
                         case Discover::Available:
                             ImGui::Text("Available");
                             break;
@@ -152,7 +150,7 @@ int main(int argc, char** args)
                     ImGui::TableSetColumnIndex(3);
                     float cellWidth = ImGui::GetContentRegionAvail().x;
                     ImGui::PushID(p.id());
-                    ImGui::BeginDisabled(p.state != Discover::Available || p == myloc);
+                    ImGui::BeginDisabled(p.state != Discover::Available);
                     if (ImGui::Button("Connect", ImVec2{cellWidth, 20.0f})) {
                         logger.log("Click ", ss.str());
                         Connection::connect_user(conn_config, p);
