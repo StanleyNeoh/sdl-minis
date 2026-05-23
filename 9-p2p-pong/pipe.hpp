@@ -5,7 +5,7 @@
 #include <atomic>
 #include <cstddef>
 
-template <typename T, std::size_t N = 1024>
+template <typename T, size_t N = 1024>
 struct SPSCQueue {
     static_assert((N & (N - 1)) == 0);
     static constexpr size_t mask = N - 1;
@@ -27,8 +27,26 @@ struct SPSCQueue {
         return true;
     }
 
+    void push(const T& item) noexcept {
+        while (true) {
+            for (int i = 0; i < 64; i++) {
+                if (try_push(item)) return true;
+            }
+            std::this_thread::yield();
+        }
+    }
+
     bool try_pop(T& item) noexcept {
         return pop_impl<true>(&item);
+    }
+
+    void pop(T& item) noexcept {
+        while (true) {
+            for (int i = 0; i < 64; i++) {
+                if (try_pop(item)) return true;
+            }
+            std::this_thread::yield();
+        }
     }
 
     bool try_pop() noexcept {
