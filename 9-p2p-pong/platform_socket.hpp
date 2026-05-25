@@ -49,6 +49,7 @@
 	#include <sys/socket.h>
 	#include <sys/types.h>
 	#include <unistd.h>
+	#include <fcntl.h>
 
 	struct SocketSession {
 		bool initialized = true;
@@ -58,6 +59,9 @@
 		return errno;
 	}
 #endif
+
+#include <utility>
+#include <iostream>
 
 sockaddr_in create_sockaddr(in_addr_t addr, in_port_t port, bool network_endian=false) {
     sockaddr_in socketAddress;
@@ -81,6 +85,7 @@ inline sockaddr* sockaddr_cast(sockaddr_in* address) {
 struct SocketResource {
 	int _socket = -1;
 
+	SocketResource() = default;
 	SocketResource(int fd): _socket(fd) {}
 	SocketResource(int domain, int type, int protocol): _socket(socket(domain, type, protocol)) {}
 	SocketResource(const SocketResource&) = delete;
@@ -110,50 +115,74 @@ struct SocketResource {
 		return _socket;
 	}
 
+	template <bool opt>
+	bool set_blocking() {
+	#ifdef _WIN32
+		u_long iMode;
+		if constexpr (opt) {
+			iMode = 0;
+		} else {
+			iMode = 1;
+		}
+		int iResult = ioctlsocket(_socket, FIONBIO, &iMode);
+		return iResult == NO_ERROR;
+	#else
+		int flags = fcntl(_socket, F_GETFL, 0);
+		if (flags == -1) return false;
+		if constexpr (opt) {
+			flags &= ~O_NONBLOCK;
+		} else {
+			flags |= O_NONBLOCK;
+		}
+		int result = fcntl(_socket, F_SETFL, flags);
+		return result != -1;
+	#endif
+	}
+
 	template <typename T>
-	int setsockopt(int opt_name, const T& opt_val) {
+	int setsockopt(int opt_name, const T& opt_val) const {
 		if (!is_available()) return -1;
 		return ::setsockopt(_socket, SOL_SOCKET, opt_name, &opt_val, sizeof(opt_val));
 	}
 
-	int connect(const sockaddr_in& address) {
+	int connect(const sockaddr_in& address) const {
 		if (!is_available()) return -1;
 		return ::connect(_socket, sockaddr_cast(&address), sizeof(address));
 	}
 
-	int bind(const sockaddr_in& address) {
+	int bind(const sockaddr_in& address) const {
 		if (!is_available()) return -1;
 		return ::bind(_socket, sockaddr_cast(&address), sizeof(address));
 	}
 
-	int listen(int nconn) {
+	int listen(int nconn) const {
 		if (!is_available()) return -1;
 		return ::listen(_socket, nconn);
 	}
 
-	int getsockname(sockaddr_in& address) {
+	int getsockname(sockaddr_in& address) const {
 		socklen_t socklen = sizeof(address);
 		return ::getsockname(_socket, sockaddr_cast(&address), &socklen);
 	}
 
-	int sendto(const void* buf, size_t buf_size, const sockaddr_in& address, int flags = 0) {
+	int sendto(const void* buf, size_t buf_size, const sockaddr_in& address, int flags = 0) const {
 		return ::sendto(_socket, buf, buf_size, flags, sockaddr_cast(&address), sizeof(address));
 	}
 
-	int recvfrom(void* buf, size_t buf_size, sockaddr_in& address, int flags = 0) {
+	int recvfrom(void* buf, size_t buf_size, sockaddr_in& address, int flags = 0) const {
 		socklen_t socklen = sizeof(address);
 		return ::recvfrom(_socket, buf, buf_size, flags, sockaddr_cast(&address), &socklen);
 	}
 
-	int send(const void* buf, size_t buf_size, int flags = 0) {
+	int send(const void* buf, size_t buf_size, int flags = 0) const {
 		return ::send(_socket, buf, buf_size, flags);
 	}
 
-	int recv(void* buf, size_t buf_size, int flags = 0) {
+	int recv(void* buf, size_t buf_size, int flags = 0) const {
 		return ::recv(_socket, buf, buf_size, flags);
 	}
 
-	SocketResource accept(sockaddr_in& address) {
+	SocketResource accept(sockaddr_in& address) const {
 		socklen_t socklen = sizeof(address);
 		SocketResource client(::accept(_socket, sockaddr_cast(&address), &socklen));
 		return client;
@@ -182,5 +211,20 @@ std::ostream& operator<<(std::ostream& o, const sockaddr_in& addr) {
 inline bool operator==(const sockaddr_in& addr1, const sockaddr_in& addr2) {
 	return addr1.sin_addr.s_addr == addr2.sin_addr.s_addr && addr1.sin_port == addr2.sin_port;
 }
+
+inline bool operator!=(const sockaddr_in& addr1, const sockaddr_in& addr2) {
+	return addr1.sin_addr.s_addr != addr2.sin_addr.s_addr || addr1.sin_port != addr2.sin_port;
+}
+
+size_t get_id(const sockaddr_in& addr) {
+	return static_cast<size_t>(addr.sin_addr.s_addr) << 16 | static_cast<size_t>(addr.sin_port);
+}
+
+template <>
+struct std::hash<sockaddr_in> {
+	size_t operator()(const sockaddr_in& addr) const noexcept {
+		return get_id(addr);
+	}
+};
 
 #endif

@@ -4,6 +4,8 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <thread>
+#include <utility>
 
 template <typename T, size_t N = 1024>
 struct SPSCQueue {
@@ -27,30 +29,50 @@ struct SPSCQueue {
         return true;
     }
 
+    bool try_push(T&& item) noexcept {
+        size_t t = tail.load(std::memory_order_relaxed);
+        if (t - cached_head >= N) {
+            cached_head = head.load(std::memory_order_acquire);
+            if (t - cached_head >= N) return false;
+        }
+        buffer[t & mask] = std::move(item);
+        tail.store(t+1, std::memory_order_release);
+        return true;
+    }
+
     void push(const T& item) noexcept {
         while (true) {
             for (int i = 0; i < 64; i++) {
-                if (try_push(item)) return true;
+                if (try_push(item)) return;
+            }
+            std::this_thread::yield();
+        }
+    }
+
+    void push(T&& item) noexcept {
+        while (true) {
+            for (int i = 0; i < 64; i++) {
+                if (try_push(std::move(item))) return;
             }
             std::this_thread::yield();
         }
     }
 
     bool try_pop(T& item) noexcept {
-        return pop_impl<true>(&item);
+        return try_pop_impl<true>(&item);
     }
 
     void pop(T& item) noexcept {
         while (true) {
             for (int i = 0; i < 64; i++) {
-                if (try_pop(item)) return true;
+                if (try_pop(item)) return;
             }
             std::this_thread::yield();
         }
     }
 
     bool try_pop() noexcept {
-        return pop_impl<false>(nullptr);
+        return try_pop_impl<false>(nullptr);
     }
     
     bool clear() noexcept {
@@ -67,10 +89,10 @@ struct SPSCQueue {
             size_t h = head.load(std::memory_order_relaxed);
             if (cached_tail == h) {
                 cached_tail = tail.load(std::memory_order_acquire);
-                if (cached_tail = h) return false;
+                if (cached_tail == h) return false;
             }
             if constexpr (CopyValue) {
-                *item = buffer[h & mask];
+                *item = std::move(buffer[h & mask]);
             }
             head.store(h+1, std::memory_order_release);
             return true;
@@ -126,7 +148,7 @@ struct MPSCQueue {
 
     bool clear() noexcept {
         bool cleared = false;
-        while (pop(nullptr)) {
+        while (pop()) {
             cleared = true;
         }
         return cleared;

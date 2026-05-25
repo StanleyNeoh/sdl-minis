@@ -161,7 +161,7 @@ struct Discover {
                 Loc receivedLoc(recvPac, senderAddress.sin_addr.s_addr);
                 logger.log("Received ", recvPac, " to ", receivedLoc);
                 Backoff backoff;
-                while (obj->isRunning.load(std::memory_order_relaxed) && !obj->incoming.push(receivedLoc)) {
+                while (obj->isRunning.load(std::memory_order_relaxed) && !obj->incoming.try_push(receivedLoc)) {
                     backoff.backoff();
                 }
             }
@@ -184,7 +184,7 @@ struct Discover {
         Loc loc;
         Backoff backoff;
         while (obj->isRunning.load(std::memory_order_relaxed)) {
-            while (obj->incoming.pop(loc)) {
+            while (obj->incoming.try_pop(loc)) {
                 backoff.reset();
                 switch (loc.state) {
                     case Closed:
