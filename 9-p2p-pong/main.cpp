@@ -10,11 +10,40 @@
 #include <sstream>
 #include <vector>
 #include <thread>
+#include <mutex>
+#include <string>
+#include <cstring>
+#include <shared_mutex>
 #include "platform_socket.hpp"
 #include "globals.hpp"
 #include "discover.hpp"
-#include "connect.hpp"
+#include "p2pTcp.hpp"
 #include "logger.hpp"
+
+struct ChatState {
+    std::vector<std::string> messages;
+    mutable std::shared_mutex messagesMutex;
+
+    void open() {
+        std::unique_lock lock(messagesMutex);
+        messages.clear();
+    }
+
+    void close() {
+        std::unique_lock lock(messagesMutex);
+        messages.clear();
+    }
+
+    void add(std::string message) {
+        std::unique_lock lock(messagesMutex);
+        messages.push_back(std::move(message));
+    }
+
+    std::vector<std::string> snapshot() const {
+        std::shared_lock lock(messagesMutex);
+        return messages;
+    }
+};
 
 // Main code
 int main(int argc, char** args)
@@ -25,12 +54,11 @@ int main(int argc, char** args)
         return 0;
     }
     u_int16_t gamePort = std::stoi(args[1]);
+    char chatInput[128] = {0};
+
+    ChatState chatState;
     Discover discover(Discover::Config(args[2], gamePort));
-    Connection::Config conn_config{
-        .currState = &currState,
-        .gamePort = gamePort
-    };
-    std::thread _connection_server_thread(Connection::server, conn_config);
+    P2PTCP::TcpManager manager(P2PTCP::TcpManager::Config{.port = gamePort});
 
     // Setup SDL
     #ifdef _WIN32
@@ -111,6 +139,33 @@ int main(int argc, char** args)
             continue;
         }
 
+        {
+            using namespace P2PTCP;
+            Event event;
+            while (manager.incomingQueue.try_pop(event)) {
+                switch (event.type) {
+                    case Event::ConnectEvent:
+                        if (event.data.connectEvent.success) {
+                            logger.log("Connected to ", event.data.connectEvent.addr);
+                            chatState.open();
+                            currState.store(AppState_InGame, std::memory_order_release);
+                        } else {
+                            logger.log("Failed to connect to ", event.data.connectEvent.addr);
+                            chatState.add("Failed to connect");
+                        }
+                        break;
+                    case P2PTCP::Event::Message:
+                        chatState.add(std::string("Peer: ") + event.data.message.message);
+                        break;
+                    case P2PTCP::Event::DisconnectEvent:
+                        logger.log("Disconnected from ", event.data.disconnectEvent.addr);
+                        chatState.close();
+                        currState.store(AppState_Available, std::memory_order_release);
+                        break;
+                }
+            }
+        }
+
         // Start the Dear ImGui frame
         ImGui_ImplSDLRenderer2_NewFrame();
         ImGui_ImplSDL2_NewFrame();
@@ -153,7 +208,9 @@ int main(int argc, char** args)
                     ImGui::BeginDisabled(p.state != Discover::Available);
                     if (ImGui::Button("Connect", ImVec2{cellWidth, 20.0f})) {
                         logger.log("Click ", ss.str());
-                        Connection::connect_user(conn_config, p);
+                        if (!manager.connect(p.address)) {
+                            logger.log("Failed to queue connection to ", p.address);
+                        }
                     }
                     ImGui::EndDisabled();
                     ImGui::PopID();
@@ -164,13 +221,39 @@ int main(int argc, char** args)
         ImGui::End();
 
         if (currState.load(std::memory_order_acquire) == AppState_InGame) {
-            ImGui::Begin("Game on");
-            ImGui::Text("Game has started");
-            if (ImGui::Button("Disconnect", ImVec2{30.0f, 10.0f})) {
-                logger.log("Disconnecting TCP");
-                currState.store(AppState_Available, std::memory_order_release);
+            bool gameWindowOpen = true;
+            if (ImGui::Begin("Game on", &gameWindowOpen)) {
+                ImGui::Text("Game has started");
+                ImGui::SeparatorText("Chat");
+                if (ImGui::BeginChild("chat_messages", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders)) {
+                    for (const auto& message: chatState.snapshot()) {
+                        ImGui::TextWrapped("%s", message.c_str());
+                    }
+                }
+                ImGui::EndChild();
+                bool sendChat = ImGui::InputText("##chat_input", chatInput, sizeof(chatInput), ImGuiInputTextFlags_EnterReturnsTrue);
+                ImGui::SameLine();
+                sendChat = ImGui::Button("Send") || sendChat;
+                if (sendChat && chatInput[0] != '\0') {
+                    if (manager.send_message(chatInput)) {
+                        chatState.add(std::string("Me: ") + chatInput);
+                        chatInput[0] = '\0';
+                    } else {
+                        chatState.add("Failed to send: no active TCP connection");
+                    }
+                }
+                if (ImGui::Button("Disconnect", ImVec2{90.0f, 24.0f})) {
+                    gameWindowOpen = false;
+                }
             }
             ImGui::End();
+
+            if (!gameWindowOpen) {
+                logger.log("Disconnecting TCP");
+                manager.disconnect();
+                chatState.close();
+                currState.store(AppState_Available, std::memory_order_release);
+            }
         }
 
         // Rendering
@@ -183,7 +266,6 @@ int main(int argc, char** args)
     }
     currState.store(AppState_Closed, std::memory_order_relaxed);
     discover.kill();
-    _connection_server_thread.join();
 
     // Cleanup
     ImGui_ImplSDLRenderer2_Shutdown();

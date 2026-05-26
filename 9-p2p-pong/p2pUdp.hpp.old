@@ -1,0 +1,472 @@
+#ifndef CONNECT_HPP
+#define CONNECT_HPP
+
+#include <iostream>
+#include <thread>
+#include <atomic>
+#include <chrono>
+#include <unordered_map>
+#include <cstring>
+#include <memory>
+#include <vector>
+#include <array>
+#include <utility>
+#include <functional>
+#include <mutex>
+#include "pipe.hpp"
+#include "platform_socket.hpp"
+#include "logger.hpp"
+#include "utils.hpp"
+
+namespace P2P {
+    struct Packet;
+    struct UdpThread;
+
+    struct Handler {
+        bool isUsed = false;
+        virtual ~Handler() = default;
+
+        virtual void on_connected() {}
+        virtual bool operator()(UdpThread& ctx, Packet* packet) = 0;
+    };
+
+
+    struct Packet {
+        enum Type: u_int16_t {
+            Uninitialized,
+            Syn,
+            Ack,
+            SynAck,
+            Heartbeat,
+            Chat,
+        };
+
+        u_int16_t type = 0;
+        u_int32_t seqnum = 0;
+        u_int32_t acknum = 0;
+        std::array<char, 128> data;
+
+        Type packet_type() const {
+            return static_cast<Type>(type);
+        }
+
+        static constexpr const char* type_name(Type type) {
+            switch (type) {
+                case Uninitialized: return "Uninitialized";
+                case Syn: return "Syn";
+                case Ack: return "Ack";
+                case SynAck: return "SynAck";
+                case Heartbeat: return "Heartbeat";
+                case Chat: return "Chat";
+                default: return "Unknown";
+            }
+        }
+
+        const char* type_name() const {
+            return type_name(packet_type());
+        }
+
+        constexpr size_t size() const {
+            return (
+                sizeof(type) 
+                + sizeof(seqnum) 
+                + sizeof(acknum) 
+                + sizeof(data)
+            );
+        }
+
+        template <typename T>
+        void write(char*& buf, const T& item) const {
+            memcpy(buf, &item, sizeof(item));
+            buf += sizeof(item);
+        }
+
+        template <typename T, size_t N>
+        void write(char*& buf, const std::array<T, N>& item) const {
+            memcpy(buf, item.data(), item.size() * sizeof(T));
+            buf += item.size() * sizeof(T);
+        }
+
+        template <typename T>
+        void read(char*& buf, T& item) const {
+            memcpy(&item, buf, sizeof(item));
+            buf += sizeof(item);
+        }
+
+        template <typename T, size_t N>
+        void read(char*& buf, std::array<T, N>& item) const {
+            memcpy(item.data(), buf, item.size() * sizeof(T));
+            buf += item.size() * sizeof(T);
+        }
+
+        void serialize(void* buf) const {
+            char* ptr = static_cast<char*>(buf);
+            write(ptr, htons(type));
+            write(ptr, htonl(seqnum));
+            write(ptr, htonl(acknum));
+            write(ptr, data);
+        }
+
+        void deserialize(void* buf) {
+            char* ptr = static_cast<char*>(buf);
+            read(ptr, type);
+            type = ntohs(type);
+            read(ptr, seqnum);
+            seqnum = ntohl(seqnum);
+            read(ptr, acknum);
+            acknum = ntohl(acknum);
+            read(ptr, data);
+        }
+
+        bool read_packet(const SocketResource& socketResource, sockaddr_in& clientAddr) {
+            char buf[size()];
+            ssize_t n = socketResource.recvfrom(buf, sizeof(buf), clientAddr);
+            if (n != static_cast<ssize_t>(size())) return false;
+            deserialize(buf);
+            return true;
+        }
+
+        bool send_packet(const SocketResource& socketResource, const sockaddr_in& clientAddr) const {
+            char buf[size()];
+            serialize(buf);
+            ssize_t n = socketResource.sendto(buf, sizeof(buf), clientAddr);
+            return n > 0;
+        }
+
+    };
+
+    struct UdpThread {
+        Handler* handler;
+        double heartbeatInterval = 2;
+        std::atomic<bool> killSignal = false;
+        std::atomic<bool> isRunning = true;
+        std::thread worker_thread;
+        SPSCQueue<Packet> recv_queue;
+        SPSCQueue<Packet> send_queue;
+
+        static void worker(UdpThread* obj) {
+            Logger logger("UDP Endpoint");
+            logger.log("Starting endpoint thread");
+            auto* handler = obj->handler;
+            if (handler) {
+                handler->on_connected();
+            } else {
+                logger.log("Handler missing");
+                obj->isRunning.store(false, std::memory_order_relaxed);
+                return;
+            }
+
+            time_t lastHeartbeat = curr_time();
+            Packet packet;
+            while (!obj->killSignal.load(std::memory_order_relaxed)) {
+                bool recv = false;
+                for (int i = 0; i < 10; i++) {
+                    for (int i = 0; i < 64; i++) {
+                        if (obj->recv_queue.try_pop(packet)) {
+                            recv = true;
+                            break;
+                        }
+                    }
+                    if (recv) break;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+                if (recv) {
+                    (*handler)(*obj, &packet);
+                } else {
+                    (*handler)(*obj, nullptr);
+                }
+                if (std::difftime(curr_time(), lastHeartbeat) > obj->heartbeatInterval) {
+                    Packet heartbeat;
+                    heartbeat.type = Packet::Heartbeat;
+                    if (obj->send_queue.try_push(heartbeat)) {
+                        logger.log("Queued heartbeat");
+                    } else {
+                        logger.log("Failed to queue heartbeat because send queue is full");
+                    }
+                    lastHeartbeat = curr_time();
+                }
+            }
+            logger.log("Stopping endpoint thread");
+            obj->isRunning.store(false, std::memory_order_relaxed);
+        }
+
+        UdpThread(Handler* handler, double heartbeatInterval = 2):
+            handler(handler),
+            heartbeatInterval(heartbeatInterval),
+            worker_thread(worker, this) {}
+
+        ~UdpThread() {
+            killSignal.store(true, std::memory_order_relaxed);
+            worker_thread.join();
+        }
+    };
+
+    struct UdpManager {
+        struct Config {
+            u_int16_t port;
+            double handshake_timeout = 10;
+            double heartbeat_interval = 2;
+            double heartbeat_timeout = 10;
+        };
+
+        struct ConnReq {
+            sockaddr_in clientAddr;
+            Handler* handler = nullptr;
+        };
+
+        enum class State {
+            Idle,
+            Initiating,
+            Responding,
+            Connected,
+        };
+
+        struct PeerState {
+            sockaddr_in addr{};
+            time_t synTime = -1;
+            time_t ackTime = -1;
+            time_t lastHeartbeat = -1;
+            u_int32_t recvSeqnum = 0;
+            u_int32_t sendSeqnum = 0;
+            Handler* handler = nullptr;
+            std::unique_ptr<UdpThread> endpoint = nullptr;
+            State state = State::Idle;
+        };
+
+        static void reset_peer(UdpManager* obj, PeerState& peer) {
+            if (peer.endpoint) {
+                peer.endpoint->killSignal.store(true, std::memory_order_relaxed);
+                peer.endpoint.reset();
+            }
+            if (peer.handler) {
+                peer.handler->isUsed = false;
+            }
+            obj->activeEndpoint.store(nullptr, std::memory_order_release);
+            peer = PeerState{};
+        }
+
+        static bool is_peer(const PeerState& peer, const sockaddr_in& addr) {
+            return peer.state != State::Idle && peer.addr == addr;
+        }
+
+        static void start_endpoint(UdpManager* obj, PeerState& peer, Logger<>& logger, std::string_view reason) {
+            peer.endpoint = std::make_unique<UdpThread>(peer.handler, obj->config.heartbeat_interval);
+            peer.state = State::Connected;
+            obj->activeEndpoint.store(peer.endpoint.get(), std::memory_order_release);
+            logger.log("Connection established with ", peer.addr, " after ", reason);
+        }
+
+        static void server(UdpManager* obj) {
+            Logger logger("UDP Server");
+            logger.log("Starting UDP server on port ", obj->config.port);
+            SocketResource socketResource(AF_INET, SOCK_DGRAM, 0);
+            if (!socketResource.is_available()) {
+                logger.log("Failed to create socket ", socket_error());
+                return;
+            }
+            if (!socketResource.set_blocking<false>()) {
+                logger.log("Failed to set non blocking socket", socket_error());
+                return;
+            }
+            sockaddr_in listenAddr = create_sockaddr(INADDR_ANY, obj->config.port);
+            if (socketResource.bind(listenAddr)) {
+                logger.log("Failed to bind sever to port", socket_error());
+                return;
+            }
+            logger.log("Listening on ", listenAddr);
+
+            PeerState peer;
+            while (!obj->killSignal.load(std::memory_order_relaxed)) {
+                if (obj->disconnectSignal.exchange(false, std::memory_order_acq_rel)) {
+                    logger.log("Disconnect requested");
+                    reset_peer(obj, peer);
+                }
+
+                ConnReq connReq;
+                while (obj->connect_queue.try_pop(connReq)) {
+                    if (!connReq.handler) continue;
+                    if (peer.state != State::Idle) {
+                        logger.log("Ignoring connect request while peer is active");
+                        continue;
+                    }
+
+                    connReq.handler->isUsed = true;
+                    peer.addr = connReq.clientAddr;
+                    peer.synTime = curr_time();
+                    peer.ackTime = -1;
+                    peer.lastHeartbeat = peer.synTime;
+                    peer.recvSeqnum = 0;
+                    peer.sendSeqnum = 0;
+                    peer.handler = connReq.handler;
+                    peer.state = State::Initiating;
+
+                    Packet syn;
+                    syn.type = Packet::Syn;
+                    syn.seqnum = ++peer.sendSeqnum;
+                    syn.acknum = peer.recvSeqnum + 1;
+                    if (syn.send_packet(socketResource, peer.addr)) {
+                        logger.log("Sent Syn to ", peer.addr, " seq=", syn.seqnum);
+                    } else {
+                        logger.log("Failed to send Syn to ", peer.addr, ": ", socket_error());
+                    }
+                }
+
+                Packet packet; sockaddr_in fromAddr;
+                while (packet.read_packet(socketResource, fromAddr)) {
+                    switch (packet.packet_type()) {
+                        case Packet::Syn: {
+                            logger.log("Received Syn from ", fromAddr, " seq=", packet.seqnum);
+                            if (peer.state != State::Idle) {
+                                logger.log("Ignoring Syn while peer is active");
+                                break;
+                            }
+                            if (!obj->defaultHandler || obj->defaultHandler->isUsed) {
+                                logger.log("Ignoring Syn because no default handler is available");
+                                break;
+                            }
+
+                            obj->defaultHandler->isUsed = true;
+                            peer.addr = fromAddr;
+                            peer.synTime = curr_time();
+                            peer.ackTime = -1;
+                            peer.lastHeartbeat = peer.synTime;
+                            peer.recvSeqnum = packet.seqnum;
+                            peer.sendSeqnum = 0;
+                            peer.handler = obj->defaultHandler;
+                            peer.state = State::Responding;
+
+                            Packet ack;
+                            ack.type = Packet::Ack;
+                            ack.seqnum = ++peer.sendSeqnum;
+                            ack.acknum = peer.recvSeqnum + 1;
+                            if (ack.send_packet(socketResource, peer.addr)) {
+                                logger.log("Sent Ack to ", peer.addr, " ack=", ack.acknum);
+                            } else {
+                                logger.log("Failed to send Ack to ", peer.addr, ": ", socket_error());
+                            }
+                            break;
+                        }
+                        case Packet::Ack: {
+                            logger.log("Received Ack from ", fromAddr, " seq=", packet.seqnum, " ack=", packet.acknum);
+                            if (!is_peer(peer, fromAddr) || peer.state != State::Initiating) break;
+                            if (std::difftime(curr_time(), peer.synTime) > obj->config.handshake_timeout) break;
+
+                            peer.ackTime = curr_time();
+                            peer.lastHeartbeat = peer.ackTime;
+                            peer.recvSeqnum = packet.seqnum;
+
+                            Packet synAck;
+                            synAck.type = Packet::SynAck;
+                            synAck.seqnum = ++peer.sendSeqnum;
+                            synAck.acknum = peer.recvSeqnum + 1;
+                            if (synAck.send_packet(socketResource, peer.addr)) {
+                                logger.log("Sent SynAck to ", peer.addr, " seq=", synAck.seqnum, " ack=", synAck.acknum);
+                            } else {
+                                logger.log("Failed to send SynAck to ", peer.addr, ": ", socket_error());
+                            }
+                            start_endpoint(obj, peer, logger, "Ack");
+                            break;
+                        }
+                        case Packet::SynAck: {
+                            logger.log("Received SynAck from ", fromAddr, " seq=", packet.seqnum, " ack=", packet.acknum);
+                            if (!is_peer(peer, fromAddr) || peer.state != State::Responding) break;
+                            if (std::difftime(curr_time(), peer.synTime) > obj->config.handshake_timeout) break;
+
+                            peer.ackTime = curr_time();
+                            peer.lastHeartbeat = peer.ackTime;
+                            peer.recvSeqnum = packet.seqnum;
+                            start_endpoint(obj, peer, logger, "SynAck");
+                            break;
+                        }
+                        case Packet::Heartbeat: {
+                            if (!is_peer(peer, fromAddr)) break;
+                            peer.lastHeartbeat = curr_time();
+                            peer.recvSeqnum = packet.seqnum;
+                            break;
+                        }
+                        default: {
+                            if (!is_peer(peer, fromAddr)) {
+                                logger.log("Ignoring ", packet.type_name(), " packet from unknown peer ", fromAddr);
+                                break;
+                            }
+                            if (packet.seqnum < peer.recvSeqnum) {
+                                logger.log("Discarding stale ", packet.type_name(), " packet from ", fromAddr);
+                                break;
+                            }
+                            peer.recvSeqnum = packet.seqnum;
+                            if (peer.endpoint) {
+                                peer.endpoint->recv_queue.push(packet);
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                if (peer.state != State::Idle && !peer.endpoint) {
+                    if (std::difftime(curr_time(), peer.synTime) > obj->config.handshake_timeout) {
+                        logger.log("Removing ", peer.addr, " after handshake timeout");
+                        reset_peer(obj, peer);
+                    }
+                } else if (peer.endpoint) {
+                    if (!peer.endpoint->isRunning.load(std::memory_order_relaxed)) {
+                        logger.log("Removing ", peer.addr, " because endpoint stopped");
+                        reset_peer(obj, peer);
+                    } else if (std::difftime(curr_time(), peer.lastHeartbeat) > obj->config.heartbeat_timeout) {
+                        logger.log("Heartbeat timeout for ", peer.addr, ", stopping endpoint");
+                        peer.endpoint->killSignal.store(true, std::memory_order_relaxed);
+                    } else {
+                        Packet item;
+                        while (peer.endpoint->send_queue.try_pop(item)) {
+                            item.seqnum = ++peer.sendSeqnum;
+                            item.acknum = peer.recvSeqnum + 1;
+                            if (!item.send_packet(socketResource, peer.addr)) {
+                                logger.log("Failed to send ", item.type_name(), " packet to ", peer.addr, ": ", socket_error());
+                            }
+                        }
+                    }
+                }
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+
+            reset_peer(obj, peer);
+            logger.log("Stopping UDP server on port ", obj->config.port);
+        }
+
+        Config config;
+        Handler* defaultHandler = nullptr;
+        std::thread server_thread;
+        SPSCQueue<ConnReq> connect_queue;
+        std::atomic<UdpThread*> activeEndpoint = nullptr;
+        std::atomic<bool> killSignal = false;
+        std::atomic<bool> disconnectSignal = false;
+
+        bool connect(const sockaddr_in& clientAddr, Handler& handler) {
+            return connect_queue.try_push(ConnReq{
+                .clientAddr = clientAddr,
+                .handler = &handler,
+            });
+        }
+
+        bool send(const Packet& packet) {
+            auto* endpoint = activeEndpoint.load(std::memory_order_acquire);
+            return endpoint && endpoint->send_queue.try_push(packet);
+        }
+
+        void disconnect() {
+            disconnectSignal.store(true, std::memory_order_release);
+        }
+
+        UdpManager(const Config& config, Handler& defaultHandler):
+            config(config),
+            defaultHandler(&defaultHandler),
+            server_thread(server, this) {}
+
+        ~UdpManager() {
+            killSignal.store(true, std::memory_order_relaxed);
+            server_thread.join();
+        }
+    };
+}
+
+#endif

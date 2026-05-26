@@ -60,6 +60,9 @@
 	}
 #endif
 
+#include <cstdint>
+#include <cstring>
+#include <string>
 #include <utility>
 #include <iostream>
 
@@ -186,6 +189,66 @@ struct SocketResource {
 		socklen_t socklen = sizeof(address);
 		SocketResource client(::accept(_socket, sockaddr_cast(&address), &socklen));
 		return client;
+	}
+
+	bool recv_exact(void* buffer, std::size_t size) const {
+		auto* bytes = static_cast<char*>(buffer);
+		std::size_t received = 0;
+		while (received < size) {
+			ssize_t nbytes = recv(bytes + received, size - received, 0);
+			if (nbytes <= 0) {
+				return false;
+			}
+			received += static_cast<std::size_t>(nbytes);
+		}
+		return true;
+	}
+
+	bool send_exact(const void* buffer, std::size_t size) const {
+		const auto* bytes = static_cast<const char*>(buffer);
+		std::size_t sent = 0;
+		while (sent < size) {
+			ssize_t nbytes = send(bytes + sent, size - sent, 0);
+			if (nbytes <= 0) {
+				return false;
+			}
+			sent += static_cast<std::size_t>(nbytes);
+		}
+		return true;
+	}
+
+	bool recv_i32(int& out) const {
+		std::int32_t value = 0;
+		if (!recv_exact(&value, sizeof(value))) {
+			return false;
+		}
+		out = ntohl(value);
+		return true;
+	}
+
+	static void append_i32(std::string& out, int value) {
+		std::int32_t encoded = htonl(static_cast<std::int32_t>(value));
+		std::size_t old_size = out.size();
+		out.resize(old_size + sizeof(encoded));
+		std::memcpy(out.data() + old_size, &encoded, sizeof(encoded));
+	}
+
+
+	bool send_i32(int value) const {
+		std::int32_t encoded = htonl(static_cast<std::int32_t>(value));
+		return send_exact(&encoded, sizeof(encoded));
+	}
+
+	bool send_string(const std::string& out) const {
+		return send_i32(static_cast<int>(out.size()))
+			&& send_exact(out.data(), out.size());
+	}
+
+	bool recv_string(std::string& out) const {
+		int ssize = 0;
+		if (!recv_i32(ssize)) return false;
+		out.resize(ssize);
+		return ssize == 0 || recv_exact(out.data(), static_cast<std::size_t>(ssize));
 	}
 };
 
