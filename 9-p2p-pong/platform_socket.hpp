@@ -279,14 +279,10 @@ inline bool operator!=(const sockaddr_in& addr1, const sockaddr_in& addr2) {
 	return addr1.sin_addr.s_addr != addr2.sin_addr.s_addr || addr1.sin_port != addr2.sin_port;
 }
 
-size_t get_id(const sockaddr_in& addr) {
-	return static_cast<size_t>(addr.sin_addr.s_addr) << 16 | static_cast<size_t>(addr.sin_port);
-}
-
 template <>
 struct std::hash<sockaddr_in> {
 	size_t operator()(const sockaddr_in& addr) const noexcept {
-		return get_id(addr);
+		return static_cast<size_t>(addr.sin_addr.s_addr) << 16 | static_cast<size_t>(addr.sin_port);
 	}
 };
 

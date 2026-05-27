@@ -5,34 +5,10 @@
 #include <mutex>
 #include <shared_mutex>
 #include <string>
-#include <atomic>
+#include "discover.hpp"
+#include "p2pTcp.hpp"
 #include "utils.hpp"
-
-struct ChatState {
-    std::vector<std::string> messages;
-    mutable std::shared_mutex messagesMutex;
-
-    void open() {
-        std::unique_lock lock(messagesMutex);
-        messages.clear();
-    }
-
-    void close() {
-        std::unique_lock lock(messagesMutex);
-        messages.clear();
-    }
-
-    void add(std::string message) {
-        std::unique_lock lock(messagesMutex);
-        messages.push_back(std::move(message));
-    }
-
-    std::vector<std::string> snapshot() const {
-        std::shared_lock lock(messagesMutex);
-        return messages;
-    }
-};
-
+#include "imgui.h"
 struct Pong {
     enum State {
         State_Ongoing,
@@ -133,18 +109,123 @@ struct Pong {
 };
 
 struct App {
-    enum State {
-        State_Uninitialised,
-        State_Available,
-        State_InGame,
-        State_Closed,
-    };
+    Discover discover;
+    TcpManager manager;
 
-    std::atomic<State> state = State_Uninitialised;
-
-    ChatState chat;
-    Pong pong;
+    // Chat State
+    bool chatWindowOpen = false;
+    std::vector<std::string> messages;
     char chatInput[128] = {0};
+
+    App(std::string_view name, u_int16_t gamePort):
+        discover(Discover::Config(name, gamePort)),
+        manager(TcpManager::Config(gamePort)) {}
+    
+    void process_events() {
+        Logger logger("App");
+        discover.process_events();
+        TcpManager::Event event;
+        while (manager.incomingQueue.try_pop(event)) {
+            switch (event.type) {
+                case TcpManager::Event::ConnectEvent: {
+                    if (event.data.connectEvent.success) {
+                        logger.log("Connected to ", event.data.connectEvent.addr);
+                        chatWindowOpen = true;
+                    } else {
+                        chatWindowOpen = false;
+                    }
+                    break;
+                }
+                case TcpManager::Event::DisconnectEvent: {
+                    if (!event.data.disconnectEvent.success) break;
+                    logger.log("Disconnected from ", event.data.disconnectEvent.addr);
+                    messages.clear();
+                    chatWindowOpen = false;
+                    break;
+                }
+                case TcpManager::Event::Message:
+                    messages.push_back(std::string("Peer: ") + event.data.message.message);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    void drawChat() {
+        if (chatWindowOpen) {
+            bool isOpen = true;
+            if (ImGui::Begin("Game on", &isOpen)) {
+                ImGui::Text("Connection Established");
+                ImGui::SeparatorText("Chat");
+                if (ImGui::BeginChild("chat_messages", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders)) {
+                    for (const auto& message: messages) {
+                        ImGui::TextWrapped("%s", message.c_str());
+                    }
+                }
+                ImGui::EndChild();
+                bool sendChat = ImGui::InputText("##chat_input", chatInput, sizeof(chatInput), ImGuiInputTextFlags_EnterReturnsTrue);
+                ImGui::SameLine();
+                sendChat = ImGui::Button("Send") || sendChat;
+                if (sendChat && chatInput[0] != '\0') {
+                    if (manager.sendMessage(chatInput)) {
+                        messages.push_back(std::string("Me: ") + chatInput);
+                        chatInput[0] = '\0';
+                    } else {
+                        messages.push_back("Failed to send: no active TCP connection");
+                    }
+                }
+            }
+            ImGui::End();
+            if (!isOpen) {
+                manager.disconnect();
+            }
+        }
+    }
+
+    void drawDiscover() {
+        ImGui::Begin("LAN Users");
+        ImGui::Text("User: %s", discover.config.ownLoc.name);
+        if (ImGui::BeginTable("neighbour_table", 3, ImGuiTableFlags_Borders, ImVec2(-FLT_MIN, 0.0))) {
+            ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthStretch, 3.0f);
+            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch, 2.0f);
+            ImGui::TableSetupColumn("Connect", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableHeadersRow();
+            {
+                for (auto& p: discover.neighbours) {
+                    Discover::Loc& neigh = p.second;
+                    std::string address;
+                    std::string state;
+                    {
+                        std::stringstream ss;
+                        ss << neigh;
+                        address = ss.str();
+                        ss.str("");
+                        ss << neigh.state;
+                        state = ss.str();
+                    }
+
+                    ImGui::TableNextRow();
+
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%s", address.data());
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%s", state.data());
+                    ImGui::TableSetColumnIndex(2);
+                    float cellWidth = ImGui::GetContentRegionAvail().x;
+                    ImGui::PushID(address.data());
+                    ImGui::BeginDisabled(neigh.state != Discover::Loc::Available);
+                    if (ImGui::Button("Chat", ImVec2{cellWidth, 20.0f})) {
+                        manager.connect(neigh.address);
+                    }
+                    ImGui::EndDisabled();
+                    ImGui::PopID();
+                }
+                ImGui::EndTable();
+            }
+        }
+        ImGui::End();
+    }
 };
 
 #endif

@@ -13,37 +13,13 @@
 #include <mutex>
 #include <string>
 #include <cstring>
+#include <atomic>
 #include <shared_mutex>
 #include "platform_socket.hpp"
-#include "globals.hpp"
 #include "discover.hpp"
 #include "p2pTcp.hpp"
 #include "logger.hpp"
-
-struct ChatState {
-    std::vector<std::string> messages;
-    mutable std::shared_mutex messagesMutex;
-
-    void open() {
-        std::unique_lock lock(messagesMutex);
-        messages.clear();
-    }
-
-    void close() {
-        std::unique_lock lock(messagesMutex);
-        messages.clear();
-    }
-
-    void add(std::string message) {
-        std::unique_lock lock(messagesMutex);
-        messages.push_back(std::move(message));
-    }
-
-    std::vector<std::string> snapshot() const {
-        std::shared_lock lock(messagesMutex);
-        return messages;
-    }
-};
+#include "app.hpp"
 
 // Main code
 int main(int argc, char** args)
@@ -53,12 +29,9 @@ int main(int argc, char** args)
         logger.log("Help: prog <tcp_port> <name>");
         return 0;
     }
-    u_int16_t gamePort = std::stoi(args[1]);
+    App app(args[2], std::stoi(args[1]));
+    bool windowOpen = false;
     char chatInput[128] = {0};
-
-    ChatState chatState;
-    Discover discover(Discover::Config(args[2], gamePort));
-    P2PTCP::TcpManager manager(P2PTCP::TcpManager::Config{.port = gamePort});
 
     // Setup SDL
     #ifdef _WIN32
@@ -128,42 +101,28 @@ int main(int argc, char** args)
         while (SDL_PollEvent(&event))
         {
             ImGui_ImplSDL2_ProcessEvent(&event);
-            if (event.type == SDL_QUIT)
-                done = true;
-            if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window))
-                done = true;
+            switch (event.type) {
+                case SDL_QUIT: {
+                    done = true;
+                    break;
+                }
+                case SDL_WINDOWEVENT: {
+                    if (event.window.event == SDL_WINDOWEVENT_CLOSE 
+                        && event.window.windowID == SDL_GetWindowID(window)) {
+                        done = true;
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
         }
+        app.process_events();
+
         if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED)
         {
             SDL_Delay(10);
             continue;
-        }
-
-        {
-            using namespace P2PTCP;
-            Event event;
-            while (manager.incomingQueue.try_pop(event)) {
-                switch (event.type) {
-                    case Event::ConnectEvent:
-                        if (event.data.connectEvent.success) {
-                            logger.log("Connected to ", event.data.connectEvent.addr);
-                            chatState.open();
-                            currState.store(AppState_InGame, std::memory_order_release);
-                        } else {
-                            logger.log("Failed to connect to ", event.data.connectEvent.addr);
-                            chatState.add("Failed to connect");
-                        }
-                        break;
-                    case P2PTCP::Event::Message:
-                        chatState.add(std::string("Peer: ") + event.data.message.message);
-                        break;
-                    case P2PTCP::Event::DisconnectEvent:
-                        logger.log("Disconnected from ", event.data.disconnectEvent.addr);
-                        chatState.close();
-                        currState.store(AppState_Available, std::memory_order_release);
-                        break;
-                }
-            }
         }
 
         // Start the Dear ImGui frame
@@ -171,90 +130,8 @@ int main(int argc, char** args)
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::Begin("LAN Users");
-        ImGui::Text("User: %s", discover.config.ownLoc.name);
-        if (ImGui::BeginTable("neighbour_table", 4, ImGuiTableFlags_Borders, ImVec2(-FLT_MIN, 0.0))) {
-            ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthStretch, 3.0f);
-            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch, 2.0f);
-            ImGui::TableSetupColumn("Connect", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-            ImGui::TableHeadersRow();
-            {
-                for (auto& p: discover.getNeighbours()) {
-                    std::stringstream ss;
-                    ss << p;
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("%s", p.name);
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("%s", ss.str().data());
-                    ImGui::TableSetColumnIndex(2);
-                    switch (p.state) {
-                        case Discover::IsHost:
-                            ImGui::Text("Is Host");
-                            break;
-                        case Discover::Available:
-                            ImGui::Text("Available");
-                            break;
-                        case Discover::Unavailable:
-                            ImGui::Text("Unavailable");
-                            break;
-                        default:
-                            break;
-                    }
-                    ImGui::TableSetColumnIndex(3);
-                    float cellWidth = ImGui::GetContentRegionAvail().x;
-                    ImGui::PushID(p.id());
-                    ImGui::BeginDisabled(p.state != Discover::Available);
-                    if (ImGui::Button("Connect", ImVec2{cellWidth, 20.0f})) {
-                        logger.log("Click ", ss.str());
-                        if (!manager.connect(p.address)) {
-                            logger.log("Failed to queue connection to ", p.address);
-                        }
-                    }
-                    ImGui::EndDisabled();
-                    ImGui::PopID();
-                }
-                ImGui::EndTable();
-            }
-        }
-        ImGui::End();
-
-        if (currState.load(std::memory_order_acquire) == AppState_InGame) {
-            bool gameWindowOpen = true;
-            if (ImGui::Begin("Game on", &gameWindowOpen)) {
-                ImGui::Text("Game has started");
-                ImGui::SeparatorText("Chat");
-                if (ImGui::BeginChild("chat_messages", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders)) {
-                    for (const auto& message: chatState.snapshot()) {
-                        ImGui::TextWrapped("%s", message.c_str());
-                    }
-                }
-                ImGui::EndChild();
-                bool sendChat = ImGui::InputText("##chat_input", chatInput, sizeof(chatInput), ImGuiInputTextFlags_EnterReturnsTrue);
-                ImGui::SameLine();
-                sendChat = ImGui::Button("Send") || sendChat;
-                if (sendChat && chatInput[0] != '\0') {
-                    if (manager.send_message(chatInput)) {
-                        chatState.add(std::string("Me: ") + chatInput);
-                        chatInput[0] = '\0';
-                    } else {
-                        chatState.add("Failed to send: no active TCP connection");
-                    }
-                }
-                if (ImGui::Button("Disconnect", ImVec2{90.0f, 24.0f})) {
-                    gameWindowOpen = false;
-                }
-            }
-            ImGui::End();
-
-            if (!gameWindowOpen) {
-                logger.log("Disconnecting TCP");
-                manager.disconnect();
-                chatState.close();
-                currState.store(AppState_Available, std::memory_order_release);
-            }
-        }
+        app.drawDiscover();
+        app.drawChat();
 
         // Rendering
         ImGui::Render();
@@ -264,8 +141,6 @@ int main(int argc, char** args)
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
         SDL_RenderPresent(renderer);
     }
-    currState.store(AppState_Closed, std::memory_order_relaxed);
-    discover.kill();
 
     // Cleanup
     ImGui_ImplSDLRenderer2_Shutdown();
