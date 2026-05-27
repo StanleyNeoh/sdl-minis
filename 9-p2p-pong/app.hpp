@@ -24,7 +24,10 @@ struct App {
     bool pongUpdate = false;
     bool pongWindowOpen = false;
     bool isMaster = false;
+    Uint64 lastFrameTick = 0;
     Pong pong;
+
+    static constexpr float PongBallSpeedMultiplier = 12.0f;
 
     App(std::string_view name, u_int16_t gamePort):
         discover(Discover::Config(name, gamePort)),
@@ -32,6 +35,20 @@ struct App {
     
     void begin_process() {
         pongUpdate = false;
+        Uint64 now = SDL_GetTicks64();
+        float deltaSeconds = 0.0f;
+        if (lastFrameTick != 0) {
+            deltaSeconds = static_cast<float>(now - lastFrameTick) / 1000.0f;
+        }
+        lastFrameTick = now;
+
+        if (!pongWindowOpen || !isMaster || deltaSeconds <= 0.0f) return;
+
+        Pong::State state = pong.step(deltaSeconds * PongBallSpeedMultiplier);
+        if (state != Pong::State_Ongoing) {
+            pong.reset();
+        }
+        pongUpdate = true;
     }
     
     void process_sdl_events(const SDL_Event& event) {
@@ -42,11 +59,11 @@ struct App {
                 if (isMaster) {
                     switch (key) {
                         case SDLK_a:
-                            pong.botP.move(-0.5);
+                            pong.botP.move(-0.5, 0.0f, pong.width);
                             pongUpdate = true;
                             break;
                         case SDLK_d:
-                            pong.botP.move(0.5);
+                            pong.botP.move(0.5, 0.0f, pong.width);
                             pongUpdate = true;
                             break;
                         default:
@@ -86,6 +103,8 @@ struct App {
                         pongWindowOpen = true;
                         chatWindowOpen = true;
                         isMaster = event.data.connectEvent.isMaster;
+                        pong.reset();
+                        lastFrameTick = 0;
                         logger.log("Connected to ", event.data.connectEvent.addr, " as ", isMaster ? "Master": "Client");
                     } else {
                         chatWindowOpen = false;
@@ -99,6 +118,7 @@ struct App {
                     messages.clear();
                     chatWindowOpen = false;
                     pongWindowOpen = false;
+                    lastFrameTick = 0;
                     break;
                 }
                 case TcpManager::Event::Message:
@@ -110,19 +130,24 @@ struct App {
                         switch(evt.type) {
                         case SDL_KEYDOWN:
                             if (evt.key.keysym.sym == SDLK_a) {
-                                pong.topP.move(-0.5);
+                                pong.topP.move(-0.5, 0.0f, pong.width);
                                 pongUpdate = true;
                             } else if (evt.key.keysym.sym == SDLK_d) {
-                                pong.topP.move(0.5);
+                                pong.topP.move(0.5, 0.0f, pong.width);
                                 pongUpdate = true;
                             }
+                            break;
+                        default:
+                            break;
                         }
                     }
+                    break;
                 }
                 case TcpManager::Event::PongState: {
                     if (pongWindowOpen && !isMaster && event.fromPeer) {
                         pong = event.data.pongState.pong;
                     }
+                    break;
                 }
                 default:
                     break;
@@ -139,9 +164,6 @@ struct App {
                     .pong = pong
                 }}
             });
-        }
-        if (app.pongWindowOpen) {
-            logger.log(app.pong);
         }
     }
 
@@ -222,6 +244,63 @@ struct App {
             }
         }
         ImGui::End();
+    }
+
+    void drawPong(SDL_Renderer* renderer) {
+        (void)renderer;
+        if (!pongWindowOpen) return;
+
+        bool isOpen = true;
+        ImGui::SetNextWindowSize(ImVec2(420.0f, 520.0f), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Pong", &isOpen)) {
+            ImGui::Text("Role: %s", isMaster ? "Master" : "Client");
+            ImGui::Text("Controls: A / D");
+            ImGui::Separator();
+
+            ImVec2 avail = ImGui::GetContentRegionAvail();
+            float canvasSide = std::max(200.0f, std::min(avail.x, avail.y));
+            ImVec2 canvasSize(canvasSide, canvasSide);
+            ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+            ImGui::InvisibleButton("pong_canvas", canvasSize);
+
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            const float padding = 12.0f;
+            ImVec2 boardMin(canvasPos.x + padding, canvasPos.y + padding);
+            ImVec2 boardMax(canvasPos.x + canvasSize.x - padding, canvasPos.y + canvasSize.y - padding);
+            float boardWidth = boardMax.x - boardMin.x;
+            float boardHeight = boardMax.y - boardMin.y;
+            float scaleX = boardWidth / pong.width;
+            float scaleY = boardHeight / pong.height;
+
+            auto world_to_screen = [&](float x, float y) {
+                return ImVec2(boardMin.x + x * scaleX, boardMin.y + y * scaleY);
+            };
+
+            drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(18, 18, 18, 255), 8.0f);
+            drawList->AddRect(boardMin, boardMax, IM_COL32(220, 220, 220, 255), 4.0f, 0, 2.0f);
+
+            ImVec2 centerTop = world_to_screen(pong.width * 0.5f, 0.0f);
+            ImVec2 centerBottom = world_to_screen(pong.width * 0.5f, pong.height);
+            drawList->AddLine(centerTop, centerBottom, IM_COL32(90, 90, 90, 255), 1.0f);
+
+            auto draw_paddle = [&](const Pong::Paddle& paddle, ImU32 color) {
+                ImVec2 paddleMin = world_to_screen(paddle.pos.x, paddle.pos.y - 0.35f);
+                ImVec2 paddleMax = world_to_screen(paddle.pos.x + paddle.w, paddle.pos.y + 0.35f);
+                drawList->AddRectFilled(paddleMin, paddleMax, color, 4.0f);
+            };
+
+            draw_paddle(pong.topP, IM_COL32(104, 211, 145, 255));
+            draw_paddle(pong.botP, IM_COL32(95, 145, 255, 255));
+
+            ImVec2 ballPos = world_to_screen(pong.ball.pos.x, pong.ball.pos.y);
+            float ballRadius = std::max(4.0f, pong.ball.r * 0.5f * (scaleX + scaleY));
+            drawList->AddCircleFilled(ballPos, ballRadius, IM_COL32(255, 244, 214, 255), 24);
+        }
+        ImGui::End();
+
+        if (!isOpen) {
+            manager.disconnect();
+        }
     }
 };
 

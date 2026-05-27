@@ -1,6 +1,7 @@
 #ifndef PONG_HPP
 #define PONG_HPP
 
+#include <algorithm>
 #include <iostream>
 #include "utils.hpp"
 
@@ -17,13 +18,13 @@ struct Pong {
 
         Paddle(float x, float y, float w): pos(x, y), w(w) {}
 
-        void move(float dx) {
-            pos.x += dx;
+        void move(float dx, float minX, float maxX) {
+            pos.x = std::clamp(pos.x + dx, minX, maxX - w);
         }
 
         void reset(float x, float y) {
             pos.x = x;
-            pos.x = y;
+            pos.y = y;
         }
 
         friend std::ostream& operator<<(std::ostream& o, const Paddle& paddle) {
@@ -46,7 +47,7 @@ struct Pong {
             float dx = pos.x - x;
             float dy = pos.y - y;
             float d2 = dx * dx + dy * dy;
-            if (r * r > d2) return false;
+            if (d2 > r * r) return false;
             info.normal = Vec2(dx, dy);
             info.normal.normalise();
             return true;
@@ -92,14 +93,14 @@ struct Pong {
         pad_w(pad_w),
         pad_m(pad_m),
         ball(width / 2, height / 2),
-        topP(width - pad_w / 2, pad_m, pad_w),
-        botP(width - pad_w / 2, height - pad_m, pad_w)
+        topP(width / 2 - pad_w / 2, pad_m, pad_w),
+        botP(width / 2 - pad_w / 2, height - pad_m, pad_w)
     {}
 
     void reset() {
         ball.reset(width / 2, height / 2);
-        topP.reset(width - pad_w / 2, pad_m);
-        botP.reset(width - pad_w / 2, height - pad_m);
+        topP.reset(width / 2 - pad_w / 2, pad_m);
+        botP.reset(width / 2 - pad_w / 2, height - pad_m);
     }
 
     State step(float dt) {

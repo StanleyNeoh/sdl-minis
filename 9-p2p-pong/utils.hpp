@@ -48,9 +48,8 @@ struct Vec2 {
     float y = 0;
 
     static Vec2 rand_unit() {
-        float l = Rand::real();
         float d = Rand::real(2 * M_PI, 0);
-        return Vec2(l * std::sin(d), l * std::cos(d));
+        return Vec2(std::sin(d), std::cos(d));
     }
 
     Vec2() = default;
