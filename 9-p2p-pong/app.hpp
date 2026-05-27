@@ -196,17 +196,21 @@ struct App {
                     Discover::Loc& neigh = p.second;
                     std::string address;
                     std::string state;
+                    bool isHost = neigh.address == discover.config.ownLoc.address;
                     {
                         std::stringstream ss;
                         ss << neigh;
                         address = ss.str();
                         ss.str("");
-                        ss << neigh.state;
+                        if (isHost) {
+                            ss << Discover::Loc::IsHost;
+                        } else {
+                            ss << neigh.state;
+                        }
                         state = ss.str();
                     }
 
                     ImGui::TableNextRow();
-
                     ImGui::TableSetColumnIndex(0);
                     ImGui::Text("%s", address.data());
                     ImGui::TableSetColumnIndex(1);
@@ -214,7 +218,7 @@ struct App {
                     ImGui::TableSetColumnIndex(2);
                     float cellWidth = ImGui::GetContentRegionAvail().x;
                     ImGui::PushID(address.data());
-                    ImGui::BeginDisabled(neigh.state != Discover::Loc::Available);
+                    ImGui::BeginDisabled(isHost || neigh.state != Discover::Loc::Available);
                     if (ImGui::Button("Chat", ImVec2{cellWidth, 20.0f})) {
                         manager.connect(neigh.address);
                     }
