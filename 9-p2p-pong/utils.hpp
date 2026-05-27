@@ -3,6 +3,8 @@
 
 #include <chrono>
 #include <thread>
+#include <random>
+#include <cmath>
 
 inline std::time_t curr_time() {
     using Clock = std::chrono::system_clock;
@@ -25,5 +27,54 @@ struct Backoff {
         spinCount = 0;
     }
 };
+
+namespace Rand {
+    static std::mt19937 engine(std::random_device{}());
+
+    int integer(int max, int min = 0) {
+        std::uniform_int_distribution<int> distribution(min, max);
+        return distribution(engine);
+    }
+
+    float real(float max = 1, float min = 0) {
+        std::uniform_real_distribution<float> distribution(min, max);
+        return distribution(engine);
+    }
+};
+
+struct Vec2 {
+    float x = 0;
+    float y = 0;
+
+    static Vec2 rand_unit() {
+        float l = Rand::real();
+        float d = Rand::real(2 * M_PI, 0);
+        return Vec2(l * std::sin(d), l * std::cos(d));
+    }
+
+    Vec2() = default;
+    Vec2(float x, float y): x(x), y(y) {}
+
+    float l2() const {
+        return x * x + y * y;
+    }
+
+    float l() const {
+        return std::sqrt(l2());
+    }
+
+    void normalise() {
+        float len = l();
+        x /= len;
+        y /= len;
+    }
+
+    Vec2 unit() const {
+        Vec2 v(x, y);
+        v.normalise();
+        return v;
+    }
+};
+
 
 #endif
