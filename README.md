@@ -49,3 +49,5 @@ If an existing build directory was generated with another CMake generator, such 
 - `8-server`: A simple TCP server that supports multiple clients chatting with each other on the same local network.
   - Supports group chats
   - To run, execute `./8-server` from the build folder.
+- `9-p2p-pong`: A simple TCP client that connects to the server and allows playing Pong and chatting with other clients on the same local network.
+  - To run, execute `./9-p2p-pong <port> <name>` from the build folder.
