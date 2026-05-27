@@ -155,7 +155,7 @@ struct Discover {
         ownLoc.state = Loc::Closed;
         n = socketResource.sendto(&ownLoc, sizeof(ownLoc), broadcastAddress);
         logger.log("Sending discover closing UDP size = ", n, " to broadcast port ", ctx->config.discoverPort, ". Error: ", socket_error());
-        logger.log("Closed dicover io thread");
+        logger.log("Closed discover io thread");
     }
 
     Discover(const Config& config): 

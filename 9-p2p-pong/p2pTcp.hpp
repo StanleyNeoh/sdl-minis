@@ -8,6 +8,8 @@
 #include "platform_socket.hpp"
 #include "pipe.hpp"
 #include "logger.hpp"
+#include "pong.hpp"
+
 struct TcpManager {
     struct Event {
         enum Type {
@@ -18,6 +20,7 @@ struct TcpManager {
             KillAction,
             Message,
             SDLEvent,
+            PongState,
         };
 
         Type type;
@@ -41,6 +44,10 @@ struct TcpManager {
             struct {
                 char message[128] = {0};
             } message;
+
+            struct {
+                Pong pong;
+            } pongState;
         } data{};
     };
 

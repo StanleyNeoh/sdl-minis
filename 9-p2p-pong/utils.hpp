@@ -5,6 +5,7 @@
 #include <thread>
 #include <random>
 #include <cmath>
+#include <iostream>
 
 inline std::time_t curr_time() {
     using Clock = std::chrono::system_clock;
@@ -73,6 +74,11 @@ struct Vec2 {
         Vec2 v(x, y);
         v.normalise();
         return v;
+    }
+
+    friend std::ostream& operator<<(std::ostream& o, const Vec2& vec) {
+        o << '(' << vec.x << ',' << vec.y << ')';
+        return o;
     }
 };
 

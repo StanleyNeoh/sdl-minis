@@ -8,105 +8,8 @@
 #include "discover.hpp"
 #include "p2pTcp.hpp"
 #include "utils.hpp"
+#include "pong.hpp"
 #include "imgui.h"
-struct Pong {
-    enum State {
-        State_Ongoing,
-        State_Top_Wins,
-        State_Bot_Wins,
-    };
-
-    struct Paddle {
-        Vec2 pos;
-        float w;
-
-        Paddle(float x, float y, float w): pos(x, y), w(w) {}
-
-        void move(float dx) {
-            pos.x += dx;
-        }
-    };
-
-    struct Ball {
-        Vec2 pos;
-        Vec2 vel;
-        float r;
-        Ball(float x, float y, float r = 1.0): pos(x, y), vel(Vec2::rand_unit()), r(r) {}
-
-        struct OverlapInfo {
-            Vec2 normal;
-        };
-
-        bool overlap_pt(float x, float y, OverlapInfo& info) const {
-            float dx = pos.x - x;
-            float dy = pos.y - y;
-            float d2 = dx * dx + dy * dy;
-            if (r * r > d2) return false;
-            info.normal = Vec2(dx, dy);
-            info.normal.normalise();
-            return true;
-        }
-
-        bool overlap_hsec(float x, float y, float l, OverlapInfo& info) const {
-            if (pos.x < x || pos.x > x + l || abs(pos.y - y) > r) return false;
-            info.normal = pos.y > y ? Vec2(0, 1) : Vec2(0, -1);
-            return true;
-        }
-
-        bool overlap_paddle(const Paddle& pad, OverlapInfo& info) const {
-            return (
-                overlap_pt(pad.pos.x, pad.pos.y, info) 
-                || overlap_pt(pad.pos.x + pad.w, pad.pos.y, info)
-                || overlap_hsec(pad.pos.x, pad.pos.y, pad.w, info)
-            );
-        }
-    };
-
-    float width;
-    float height;
-    Ball ball;
-    Paddle topP;
-    Paddle botP;
-
-    Pong(float width = 30.0, float height = 30.0, float ball_r = 1.0, float pad_w = 3.0, float pad_m = 1.0): 
-        width(width), 
-        height(height),
-        ball(width / 2, height / 2),
-        topP(width - pad_w / 2, pad_m, pad_w),
-        botP(width - pad_w / 2, height - pad_m, pad_w)
-    {}
-
-    State step(float dt) {
-        ball.pos.x = ball.pos.x + ball.vel.x * dt;
-        ball.pos.y = ball.pos.y + ball.vel.y * dt;
-        if (ball.pos.x < 0) {
-            ball.pos.x = 0;
-            if (ball.vel.x < 0) ball.vel.x = -ball.vel.x;
-        }
-        if (ball.pos.y < 0) {
-            return State_Bot_Wins;
-        }
-        if (ball.pos.x > width) {
-            ball.pos.x = width;
-            if (ball.vel.x > 0) ball.vel.x = -ball.vel.x;
-        }
-        if (ball.pos.y > height) {
-            return State_Top_Wins;
-        }
-        Ball::OverlapInfo info;
-        if (ball.overlap_paddle(topP, info)) {
-            float scale = ball.vel.x * info.normal.x + ball.vel.y * info.normal.y;
-            ball.vel.x -= info.normal.x * 2 * scale;
-            ball.vel.y -= info.normal.y * 2 * scale;
-        }
-        if (ball.overlap_paddle(botP, info)) {
-            float scale = ball.vel.x * info.normal.x + ball.vel.y * info.normal.y;
-            ball.vel.x -= info.normal.x * 2 * scale;
-            ball.vel.y -= info.normal.y * 2 * scale;
-        }
-        return State_Ongoing;
-    }
-};
 
 struct App {
     Discover discover;
@@ -117,22 +20,76 @@ struct App {
     std::vector<std::string> messages;
     char chatInput[128] = {0};
 
+    // Pong State
+    bool pongUpdate = false;
+    bool pongWindowOpen = false;
+    bool isMaster = false;
+    Pong pong;
+
     App(std::string_view name, u_int16_t gamePort):
         discover(Discover::Config(name, gamePort)),
         manager(TcpManager::Config(gamePort)) {}
     
+    void begin_process() {
+        pongUpdate = false;
+    }
+    
+    void process_sdl_events(const SDL_Event& event) {
+        if (!pongWindowOpen) return;
+        switch (event.type) {
+            case SDL_KEYDOWN: {
+                auto key = event.key.keysym.sym;
+                if (isMaster) {
+                    switch (key) {
+                        case SDLK_a:
+                            pong.botP.move(-0.5);
+                            pongUpdate = true;
+                            break;
+                        case SDLK_d:
+                            pong.botP.move(0.5);
+                            pongUpdate = true;
+                            break;
+                        default:
+                            break;
+                    }
+                } else {
+                    switch(key) {
+                        case SDLK_a:
+                        case SDLK_d:
+                            manager.outgoingQueue.push(TcpManager::Event{
+                                .type=TcpManager::Event::SDLEvent,
+                                .data = { .sdlEvent = {
+                                    .event = event
+                                }}
+                            });
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+    
     void process_events() {
         Logger logger("App");
         discover.process_events();
+
         TcpManager::Event event;
         while (manager.incomingQueue.try_pop(event)) {
             switch (event.type) {
                 case TcpManager::Event::ConnectEvent: {
                     if (event.data.connectEvent.success) {
-                        logger.log("Connected to ", event.data.connectEvent.addr);
+                        pongWindowOpen = true;
                         chatWindowOpen = true;
+                        isMaster = event.data.connectEvent.isMaster;
+                        logger.log("Connected to ", event.data.connectEvent.addr, " as ", isMaster ? "Master": "Client");
                     } else {
                         chatWindowOpen = false;
+                        pongWindowOpen = false;
                     }
                     break;
                 }
@@ -141,14 +98,50 @@ struct App {
                     logger.log("Disconnected from ", event.data.disconnectEvent.addr);
                     messages.clear();
                     chatWindowOpen = false;
+                    pongWindowOpen = false;
                     break;
                 }
                 case TcpManager::Event::Message:
                     messages.push_back(std::string("Peer: ") + event.data.message.message);
                     break;
+                case TcpManager::Event::SDLEvent: {
+                    if (pongWindowOpen && isMaster && event.fromPeer) {
+                        SDL_Event& evt = event.data.sdlEvent.event;
+                        switch(evt.type) {
+                        case SDL_KEYDOWN:
+                            if (evt.key.keysym.sym == SDLK_a) {
+                                pong.topP.move(-0.5);
+                                pongUpdate = true;
+                            } else if (evt.key.keysym.sym == SDLK_d) {
+                                pong.topP.move(0.5);
+                                pongUpdate = true;
+                            }
+                        }
+                    }
+                }
+                case TcpManager::Event::PongState: {
+                    if (pongWindowOpen && !isMaster && event.fromPeer) {
+                        pong = event.data.pongState.pong;
+                    }
+                }
                 default:
                     break;
             }
+        }
+    }
+
+    void end_process() {
+        Logger logger("Pong");
+        if (pongWindowOpen && isMaster && pongUpdate) {
+            manager.outgoingQueue.push(TcpManager::Event{
+                .type = TcpManager::Event::PongState,
+                .data = { .pongState = {
+                    .pong = pong
+                }}
+            });
+        }
+        if (app.pongWindowOpen) {
+            logger.log(app.pong);
         }
     }
 
