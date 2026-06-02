@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iostream>
 #include "utils.hpp"
+#include "packet.hpp"
 
 struct Pong {
     enum State {
@@ -14,22 +15,36 @@ struct Pong {
 
     struct Paddle {
         Vec2 pos;
+        float vx = 0;
         float w;
 
-        Paddle(float x, float y, float w): pos(x, y), w(w) {}
+        Paddle(float x, float y, float w): pos(x, y), vx(0), w(w) {}
 
-        void move(float dx, float minX, float maxX) {
-            pos.x = std::clamp(pos.x + dx, minX, maxX - w);
+        void move(float vx) {
+            this->vx = vx;
         }
 
-        void reset(float x, float y) {
+        void reset(float x, float y, float w) {
             pos.x = x;
             pos.y = y;
+            w = w;
         }
 
         friend std::ostream& operator<<(std::ostream& o, const Paddle& paddle) {
             o << "Paddle{pos=" << paddle.pos << ",w=" << paddle.w << "}";
             return o;
+        }
+
+        void unpack(const Packet::PongPaddlePacket& padpac) {
+            pos.x = padpac.pos_x;
+            vx = padpac.vel_x;
+        }
+
+        Packet::PongPaddlePacket pack() const {
+            return Packet::PongPaddlePacket{
+                .pos_x = pos.x,
+                .vel_x = vx
+            };
         }
     };
 
@@ -73,9 +88,34 @@ struct Pong {
             vel = Vec2::rand_unit();
         }
 
+        void reset(float x, float y, float vx, float vy) {
+            pos.x = x;
+            pos.y = y;
+            vel.x = vx;
+            vel.y = vy;
+        }
+
         friend std::ostream& operator<<(std::ostream& o, const Ball& ball) {
             o << "Ball{pos=" << ball.pos << ",vel=" << ball.vel << ",r=" << ball.r<< "}";
             return o;
+        }
+
+        void unpack(const Packet::PongBallPacket& ballpac)  {
+            reset(
+                ballpac.ball_pos_x,
+                ballpac.ball_pos_y,
+                ballpac.ball_vel_x,
+                ballpac.ball_vel_y
+            );
+        }
+
+        Packet::PongBallPacket pack() const {
+            return Packet::PongBallPacket{
+                .ball_pos_x = pos.x,
+                .ball_pos_y = pos.y,
+                .ball_vel_x = vel.x,
+                .ball_vel_y = vel.y
+            };
         }
     };
 
@@ -99,13 +139,15 @@ struct Pong {
 
     void reset() {
         ball.reset(width / 2, height / 2);
-        topP.reset(width / 2 - pad_w / 2, pad_m);
-        botP.reset(width / 2 - pad_w / 2, height - pad_m);
+        topP.reset(width / 2 - pad_w / 2, pad_m, pad_w);
+        botP.reset(width / 2 - pad_w / 2, height - pad_m, pad_w);
     }
 
     State step(float dt) {
         ball.pos.x = ball.pos.x + ball.vel.x * dt;
         ball.pos.y = ball.pos.y + ball.vel.y * dt;
+        topP.pos.x = SDL_clamp(topP.pos.x + topP.vx * dt, 0, width);
+        botP.pos.x = SDL_clamp(botP.pos.x + botP.vx * dt, 0, width);
         if (ball.pos.x < 0) {
             ball.pos.x = 0;
             if (ball.vel.x < 0) ball.vel.x = -ball.vel.x;
@@ -142,6 +184,50 @@ struct Pong {
             << "}";
         return o;
     }
+
+    void unpack(const Packet::PongConfigPacket& config) {
+        width = config.width;
+        height = config.height;
+        pad_w = config.pad_w;
+        pad_m = config.pad_m;
+        ball.reset(
+            config.ball_pos_x, 
+            config.ball_pos_y, 
+            config.ball_vel_x, 
+            config.ball_vel_y
+        );
+        topP.reset(
+            config.top_pos_x,
+            config.top_pos_y,
+            pad_w
+        );
+        botP.reset(
+            config.bot_pos_x,
+            config.bot_pos_y,
+            pad_w
+        );
+    }
+
+    Packet::PongConfigPacket pack() const {
+        return Packet::PongConfigPacket{
+            .width = width,
+            .height = height,
+            .pad_w = pad_w,
+            .pad_m = pad_m,
+            .ball_pos_x = ball.pos.x,
+            .ball_pos_y = ball.pos.y,
+            .ball_vel_x = ball.vel.x,
+            .ball_vel_y = ball.vel.y,
+            .ball_r = ball.r,
+            .top_pos_x = topP.pos.x,
+            .top_pos_y = topP.pos.y,
+            .top_w = topP.w,
+            .bot_pos_x = botP.pos.x,
+            .bot_pos_y = botP.pos.y,
+            .bot_w = botP.w
+        };
+    }
+
 };
 
 #endif

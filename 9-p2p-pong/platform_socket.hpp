@@ -286,4 +286,18 @@ struct std::hash<sockaddr_in> {
 	}
 };
 
+uint32_t encode_f32(float value) {
+    uint32_t bits = 0;
+    memcpy(&bits, &value, sizeof(bits));
+    return htonl(bits);
+}
+
+float decode_f32(uint32_t value) {
+    uint32_t bits = ntohl(value);
+    float decoded = 0.0f;
+    memcpy(&decoded, &bits, sizeof(decoded));
+    return decoded;
+}
+
+
 #endif

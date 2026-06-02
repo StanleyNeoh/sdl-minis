@@ -135,8 +135,7 @@ int main(int argc, char** args)
         ImGui::NewFrame();
 
         app.drawDiscover();
-        app.drawChat();
-        app.drawPong(renderer);
+        app.draw_app();
 
         // Rendering
         ImGui::Render();
