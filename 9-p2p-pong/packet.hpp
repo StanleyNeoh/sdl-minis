@@ -266,6 +266,113 @@ size_t packet_size(Packet::Type t);
 bool packet_serialize(Packet::Type t, const Packet::Packet& packet, char* buf);
 bool packet_deserialize(Packet::Type t, Packet::Packet& packet, char* buf);
 
+// Template specializations for packet size
+template<typename PacketType>
+constexpr size_t get_packet_size();
+template<> constexpr size_t get_packet_size<Packet::MessagePacket>() { 
+    return sizeof(Packet::MessagePacket::message); 
+}
+template<> constexpr size_t get_packet_size<Packet::PongReadyPacket>() { 
+    return sizeof(Packet::PongReadyPacket::ready); 
+}
+template<> constexpr size_t get_packet_size<Packet::PongConfigPacket>() { 
+    return sizeof(Packet::PongConfigPacket) / sizeof(float) * sizeof(uint32_t); 
+}
+template<> constexpr size_t get_packet_size<Packet::PongPaddlePacket>() { 
+    return sizeof(Packet::PongPaddlePacket) / sizeof(float) * sizeof(uint32_t); 
+}
+template<> constexpr size_t get_packet_size<Packet::PongBallPacket>() { 
+    return sizeof(Packet::PongBallPacket) / sizeof(float) * sizeof(uint32_t); 
+}
+
+template<typename PacketType>
+inline auto& get_union_member(Packet::Packet& packet);
+template<> inline auto& get_union_member<Packet::MessagePacket>(Packet::Packet& p) {
+    return p.data.message;
+}
+template<> inline auto& get_union_member<Packet::PongReadyPacket>(Packet::Packet& p) {
+    return p.data.pong_ready;
+}
+template<> inline auto& get_union_member<Packet::PongConfigPacket>(Packet::Packet& p) {
+    return p.data.pong_config;
+}
+template<> inline auto& get_union_member<Packet::PongPaddlePacket>(Packet::Packet& p) {
+    return p.data.pong_paddle;
+}
+template<> inline auto& get_union_member<Packet::PongBallPacket>(Packet::Packet& p) {
+    return p.data.pong_ball;
+}
+
+template <typename A, typename... Rest>
+constexpr size_t get_size(Packet::Type t) {
+    if (t == A::type) {
+        return get_packet_size<A>();
+    }
+    if constexpr (sizeof...(Rest) > 0) {
+        return get_size<Rest...>(t);
+    }
+    return 0;
+}
+
+// Serialize with variadic dispatch
+template <typename A, typename... Rest>
+bool serialize_packet(const Packet::Packet& packet, char* buf) {
+    if (packet.type == A::type) {
+        auto& member = get_union_member<A>(const_cast<Packet::Packet&>(packet));
+        member.serialize(buf);
+        return true;
+    }
+    if constexpr (sizeof...(Rest) > 0) {
+        return serialize_packet<Rest...>(packet, buf);
+    }
+    return false;
+}
+
+// Deserialize with variadic dispatch  
+template <typename A, typename... Rest>
+bool deserialize_packet(Packet::Type t, Packet::Packet& packet, char* buf) {
+    if (t == A::type) {
+        auto& member = get_union_member<A>(packet);
+        member.deserialize(buf);
+        return true;
+    }
+    if constexpr (sizeof...(Rest) > 0) {
+        return deserialize_packet<Rest...>(t, packet, buf);
+    }
+    return false;
+}
+
+// Convenience wrapper using all wireable packet types
+inline size_t packet_size(Packet::Type t) {
+    return get_size<
+        Packet::MessagePacket,
+        Packet::PongReadyPacket,
+        Packet::PongConfigPacket,
+        Packet::PongPaddlePacket,
+        Packet::PongBallPacket
+    >(t);
+}
+
+inline bool packet_serialize(const Packet::Packet& packet, char* buf) {
+    return serialize_packet<
+        Packet::MessagePacket,
+        Packet::PongReadyPacket,
+        Packet::PongConfigPacket,
+        Packet::PongPaddlePacket,
+        Packet::PongBallPacket
+    >(packet, buf);
+}
+
+inline bool packet_deserialize(Packet::Type t, Packet::Packet& packet, char* buf) {
+    return deserialize_packet<
+        Packet::MessagePacket,
+        Packet::PongReadyPacket,
+        Packet::PongConfigPacket,
+        Packet::PongPaddlePacket,
+        Packet::PongBallPacket
+    >(t, packet, buf);
+}
+
 namespace Packet {
     struct Reader {
         enum Status {
@@ -326,130 +433,16 @@ namespace Packet {
     struct Writer {
         char buffer[sizeof(Packet)];
         
-        size_t serialize(const Packet& packet) {
+        bool send(const SocketResource& socketResource, const Packet& packet) {
             // Encode type in network byte order
             uint32_t encodedType = htonl(static_cast<uint32_t>(packet.type));
             std::memcpy(buffer, &encodedType, sizeof(encodedType));
             
             // Use variadic template to serialize body
-            if (::packet_serialize(packet.type, packet, buffer + sizeof(Type))) {
-                return sizeof(Type) + ::packet_size(packet.type);
-            }
-            return sizeof(Type);
-        }
-        
-        bool send(const SocketResource& socketResource, const Packet& packet) {
-            size_t packetSize = serialize(packet);
-            return socketResource.send_exact(buffer, packetSize);
+            if (!::packet_serialize(packet, buffer + sizeof(Type))) return false;
+            return socketResource.send_exact(buffer, sizeof(Type) + ::packet_size(packet.type));
         }
     };
-}
-
-// Template specializations for packet size
-template<typename PacketType>
-constexpr size_t get_packet_size();
-template<> constexpr size_t get_packet_size<Packet::MessagePacket>() { 
-    return sizeof(Packet::MessagePacket::message); 
-}
-template<> constexpr size_t get_packet_size<Packet::PongReadyPacket>() { 
-    return sizeof(Packet::PongReadyPacket::ready); 
-}
-template<> constexpr size_t get_packet_size<Packet::PongConfigPacket>() { 
-    return sizeof(Packet::PongConfigPacket) / sizeof(float) * sizeof(uint32_t); 
-}
-template<> constexpr size_t get_packet_size<Packet::PongPaddlePacket>() { 
-    return sizeof(Packet::PongPaddlePacket) / sizeof(float) * sizeof(uint32_t); 
-}
-template<> constexpr size_t get_packet_size<Packet::PongBallPacket>() { 
-    return sizeof(Packet::PongBallPacket) / sizeof(float) * sizeof(uint32_t); 
-}
-
-template<typename PacketType>
-inline auto& get_union_member(Packet::Packet& packet);
-template<> inline auto& get_union_member<Packet::MessagePacket>(Packet::Packet& p) {
-    return p.data.message;
-}
-template<> inline auto& get_union_member<Packet::PongReadyPacket>(Packet::Packet& p) {
-    return p.data.pong_ready;
-}
-template<> inline auto& get_union_member<Packet::PongConfigPacket>(Packet::Packet& p) {
-    return p.data.pong_config;
-}
-template<> inline auto& get_union_member<Packet::PongPaddlePacket>(Packet::Packet& p) {
-    return p.data.pong_paddle;
-}
-template<> inline auto& get_union_member<Packet::PongBallPacket>(Packet::Packet& p) {
-    return p.data.pong_ball;
-}
-
-template <typename A, typename... Rest>
-constexpr size_t get_size(Packet::Type t) {
-    if (t == A::type) {
-        return get_packet_size<A>();
-    }
-    if constexpr (sizeof...(Rest) > 0) {
-        return get_size<Rest...>(t);
-    }
-    return 0;
-}
-
-// Serialize with variadic dispatch
-template <typename A, typename... Rest>
-bool serialize_packet(Packet::Type t, const Packet::Packet& packet, char* buf) {
-    if (t == A::type) {
-        auto& member = get_union_member<A>(const_cast<Packet::Packet&>(packet));
-        member.serialize(buf);
-        return true;
-    }
-    if constexpr (sizeof...(Rest) > 0) {
-        return serialize_packet<Rest...>(t, packet, buf);
-    }
-    return false;
-}
-
-// Deserialize with variadic dispatch  
-template <typename A, typename... Rest>
-bool deserialize_packet(Packet::Type t, Packet::Packet& packet, char* buf) {
-    if (t == A::type) {
-        auto& member = get_union_member<A>(packet);
-        member.deserialize(buf);
-        return true;
-    }
-    if constexpr (sizeof...(Rest) > 0) {
-        return deserialize_packet<Rest...>(t, packet, buf);
-    }
-    return false;
-}
-
-// Convenience wrapper using all wireable packet types
-inline size_t packet_size(Packet::Type t) {
-    return get_size<
-        Packet::MessagePacket,
-        Packet::PongReadyPacket,
-        Packet::PongConfigPacket,
-        Packet::PongPaddlePacket,
-        Packet::PongBallPacket
-    >(t);
-}
-
-inline bool packet_serialize(Packet::Type t, const Packet::Packet& packet, char* buf) {
-    return serialize_packet<
-        Packet::MessagePacket,
-        Packet::PongReadyPacket,
-        Packet::PongConfigPacket,
-        Packet::PongPaddlePacket,
-        Packet::PongBallPacket
-    >(t, packet, buf);
-}
-
-inline bool packet_deserialize(Packet::Type t, Packet::Packet& packet, char* buf) {
-    return deserialize_packet<
-        Packet::MessagePacket,
-        Packet::PongReadyPacket,
-        Packet::PongConfigPacket,
-        Packet::PongPaddlePacket,
-        Packet::PongBallPacket
-    >(t, packet, buf);
 }
 
 #endif
