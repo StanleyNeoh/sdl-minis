@@ -99,7 +99,7 @@ namespace Packet {
         void serialize(char* buf) const {
             char* ptr = buf;
             auto mmemcpy = [](char*& ptr, float x) {
-                float y = encode_f32(x);
+                uint32_t y = encode_f32(x);
                 memcpy(ptr, &y, sizeof(y));
                 ptr += sizeof(x);
             };
@@ -159,7 +159,7 @@ namespace Packet {
         void serialize(char* buf) const {
             char* ptr = buf;
             auto mmemcpy = [](char*& ptr, float x) {
-                float y = encode_f32(x);
+                uint32_t y = encode_f32(x);
                 memcpy(ptr, &y, sizeof(y));
                 ptr += sizeof(x);
             };
@@ -195,7 +195,7 @@ namespace Packet {
         void serialize(char* buf) const {
             char* ptr = buf;
             auto mmemcpy = [](char*& ptr, float x) {
-                float y = encode_f32(x);
+                uint32_t y = encode_f32(x);
                 memcpy(ptr, &y, sizeof(y));
                 ptr += sizeof(x);
             };

@@ -48,7 +48,7 @@ struct App {
         discover(Discover::Config(name, gamePort)),
         manager(TcpManager::Config(gamePort)) {}
     
-    void reset_to_state(bool _app_state) {
+    void reset_to_state(AppState _app_state) {
         if (_app_state == AppState_ReadyMenu) {
             app_state = AppState_ReadyMenu;
             last_frame_ms = 0;
@@ -209,44 +209,128 @@ struct App {
                 ImGui::Text("Controls: A / D");
                 ImGui::Separator();
 
-                ImVec2 avail = ImGui::GetContentRegionAvail();
-                float canvasSide = std::max(200.0f, std::min(avail.x, avail.y));
-                ImVec2 canvasSize(canvasSide, canvasSide);
-                ImVec2 canvasPos = ImGui::GetCursorScreenPos();
-                ImGui::InvisibleButton("pong_canvas", canvasSize);
+                if (app_state == AppState_ReadyMenu) {
+                    ImGui::Text("Ready Status:");
+                    ImGui::Separator();
+                    
+                    // Table showing both players' ready status
+                    if (ImGui::BeginTable("ReadyTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+                        ImGui::TableSetupColumn("Player");
+                        ImGui::TableSetupColumn("Ready");
+                        ImGui::TableHeadersRow();
+                        
+                        // Master row
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::Text("Master");
+                        ImGui::TableNextColumn();
+                        if (master_ready) {
+                            ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Ready");
+                        } else {
+                            ImGui::TextColored(ImVec4(0.8f, 0.4f, 0.4f, 1.0f), "Not Ready");
+                        }
+                        
+                        // Client row
+                        ImGui::TableNextRow();
+                        ImGui::TableNextColumn();
+                        ImGui::Text("Client");
+                        ImGui::TableNextColumn();
+                        if (client_ready) {
+                            ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Ready");
+                        } else {
+                            ImGui::TextColored(ImVec4(0.8f, 0.4f, 0.4f, 1.0f), "Not Ready");
+                        }
+                        
+                        ImGui::EndTable();
+                    }
+                    
+                    ImGui::Spacing();
+                    
+                    // Local ready checkbox
+                    bool my_ready_value;
+                    if (ImGui::Checkbox("I'm Ready!", &my_ready_value)) {
+                        // Update local state
+                        if (is_master) {
+                            master_ready = my_ready_value;
+                        } else {
+                            client_ready = my_ready_value;
+                        }
+                        
+                        // Send ready state to peer
+                        Packet::Packet packet{
+                            .type = Packet::PongReadyType,
+                            .data = { .pong_ready = { .ready = my_ready_value } }
+                        };
+                        manager.outgoingQueue.try_push(packet);
+                    }
+                    
+                    // Start game when both ready
+                    if (master_ready && client_ready) {
+                        ImGui::Spacing();
+                        ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Both players ready!");
+                        
+                        // Only master can start the game
+                        if (is_master) {
+                            if (ImGui::Button("Start Game")) {
+                                // Reset and pack game state
+                                pong.reset();
+                                
+                                // Send config to peer (this signals game start)
+                                Packet::Packet packet{
+                                    .type = Packet::PongConfigType,
+                                    .data = { .pong_config = pong.pack() }
+                                };
+                                manager.outgoingQueue.try_push(packet);
+                                
+                                // Start game locally
+                                reset_to_state(AppState_Ongoing);
+                                last_frame_ms = SDL_GetTicks64();
+                            }
+                        } else {
+                            ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.4f, 1.0f), "Waiting for master to start...");
+                        }
+                    }
 
-                ImDrawList* drawList = ImGui::GetWindowDrawList();
-                const float padding = 12.0f;
-                ImVec2 boardMin(canvasPos.x + padding, canvasPos.y + padding);
-                ImVec2 boardMax(canvasPos.x + canvasSize.x - padding, canvasPos.y + canvasSize.y - padding);
-                float boardWidth = boardMax.x - boardMin.x;
-                float boardHeight = boardMax.y - boardMin.y;
-                float scaleX = boardWidth / pong.width;
-                float scaleY = boardHeight / pong.height;
+                } else if (app_state == AppState_Ongoing) {
+                    ImVec2 avail = ImGui::GetContentRegionAvail();
+                    float canvasSide = std::max(200.0f, std::min(avail.x, avail.y));
+                    ImVec2 canvasSize(canvasSide, canvasSide);
+                    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+                    ImGui::InvisibleButton("pong_canvas", canvasSize);
 
-                auto world_to_screen = [&](float x, float y) {
-                    return ImVec2(boardMin.x + x * scaleX, boardMin.y + y * scaleY);
-                };
+                    ImDrawList* drawList = ImGui::GetWindowDrawList();
+                    const float padding = 12.0f;
+                    ImVec2 boardMin(canvasPos.x + padding, canvasPos.y + padding);
+                    ImVec2 boardMax(canvasPos.x + canvasSize.x - padding, canvasPos.y + canvasSize.y - padding);
+                    float boardWidth = boardMax.x - boardMin.x;
+                    float boardHeight = boardMax.y - boardMin.y;
+                    float scaleX = boardWidth / pong.width;
+                    float scaleY = boardHeight / pong.height;
 
-                drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(18, 18, 18, 255), 8.0f);
-                drawList->AddRect(boardMin, boardMax, IM_COL32(220, 220, 220, 255), 4.0f, 0, 2.0f);
+                    auto world_to_screen = [&](float x, float y) {
+                        return ImVec2(boardMin.x + x * scaleX, boardMin.y + y * scaleY);
+                    };
 
-                ImVec2 centerTop = world_to_screen(pong.width * 0.5f, 0.0f);
-                ImVec2 centerBottom = world_to_screen(pong.width * 0.5f, pong.height);
-                drawList->AddLine(centerTop, centerBottom, IM_COL32(90, 90, 90, 255), 1.0f);
+                    drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(18, 18, 18, 255), 8.0f);
+                    drawList->AddRect(boardMin, boardMax, IM_COL32(220, 220, 220, 255), 4.0f, 0, 2.0f);
 
-                auto draw_paddle = [&](const Pong::Paddle& paddle, ImU32 color) {
-                    ImVec2 paddleMin = world_to_screen(paddle.pos.x, paddle.pos.y - 0.35f);
-                    ImVec2 paddleMax = world_to_screen(paddle.pos.x + paddle.w, paddle.pos.y + 0.35f);
-                    drawList->AddRectFilled(paddleMin, paddleMax, color, 4.0f);
-                };
+                    ImVec2 centerTop = world_to_screen(pong.width * 0.5f, 0.0f);
+                    ImVec2 centerBottom = world_to_screen(pong.width * 0.5f, pong.height);
+                    drawList->AddLine(centerTop, centerBottom, IM_COL32(90, 90, 90, 255), 1.0f);
 
-                draw_paddle(pong.topP, IM_COL32(104, 211, 145, 255));
-                draw_paddle(pong.botP, IM_COL32(95, 145, 255, 255));
+                    auto draw_paddle = [&](const Pong::Paddle& paddle, ImU32 color) {
+                        ImVec2 paddleMin = world_to_screen(paddle.pos.x, paddle.pos.y - 0.35f);
+                        ImVec2 paddleMax = world_to_screen(paddle.pos.x + paddle.w, paddle.pos.y + 0.35f);
+                        drawList->AddRectFilled(paddleMin, paddleMax, color, 4.0f);
+                    };
 
-                ImVec2 ballPos = world_to_screen(pong.ball.pos.x, pong.ball.pos.y);
-                float ballRadius = std::max(4.0f, pong.ball.r * 0.5f * (scaleX + scaleY));
-                drawList->AddCircleFilled(ballPos, ballRadius, IM_COL32(255, 244, 214, 255), 24);
+                    draw_paddle(pong.topP, IM_COL32(104, 211, 145, 255));
+                    draw_paddle(pong.botP, IM_COL32(95, 145, 255, 255));
+
+                    ImVec2 ballPos = world_to_screen(pong.ball.pos.x, pong.ball.pos.y);
+                    float ballRadius = std::max(4.0f, pong.ball.r * 0.5f * (scaleX + scaleY));
+                    drawList->AddCircleFilled(ballPos, ballRadius, IM_COL32(255, 244, 214, 255), 24);
+                }
                 ImGui::EndChild();
 
                 ImGui::SameLine();

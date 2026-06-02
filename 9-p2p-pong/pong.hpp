@@ -132,7 +132,7 @@ struct Pong {
         height(height),
         pad_w(pad_w),
         pad_m(pad_m),
-        ball(width / 2, height / 2),
+        ball(width / 2, height / 2, ball_r),
         topP(width / 2 - pad_w / 2, pad_m, pad_w),
         botP(width / 2 - pad_w / 2, height - pad_m, pad_w)
     {}
@@ -196,6 +196,7 @@ struct Pong {
             config.ball_vel_x, 
             config.ball_vel_y
         );
+        ball.r = config.ball_r;
         topP.reset(
             config.top_pos_x,
             config.top_pos_y,
