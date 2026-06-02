@@ -50,4 +50,7 @@ If an existing build directory was generated with another CMake generator, such 
   - Supports group chats
   - To run, execute `./8-server` from the build folder.
 - `9-p2p-pong`: A simple TCP client that connects to the server and allows playing Pong and chatting with other clients on the same local network.
+  - Utilises compile time metaprogramming to generate message handling code for different message types, allowing for a clean and extensible design.
+  - Supports both chat messages and game state updates, allowing players to chat while playing Pong.
+  - Implements client-side prediction for smooth gameplay, even with network latency with periodic state synchronization to correct any discrepancies between the predicted state and the actual state from the server.
   - To run, execute `./9-p2p-pong <port> <name>` from the build folder.
