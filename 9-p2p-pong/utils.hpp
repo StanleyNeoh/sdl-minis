@@ -47,9 +47,9 @@ struct Vec2 {
     float x = 0;
     float y = 0;
 
-    static Vec2 rand_unit() {
+    static Vec2 rand_unit(float length = 1) {
         float d = Rand::real(2 * M_PI, 0);
-        return Vec2(std::sin(d), std::cos(d));
+        return Vec2(std::sin(d) * length, std::cos(d) * length);
     }
 
     Vec2() = default;
@@ -73,6 +73,10 @@ struct Vec2 {
         Vec2 v(x, y);
         v.normalise();
         return v;
+    }
+
+    float dot(const Vec2& other) const {
+        return x * other.x + y * other.y;
     }
 
     friend std::ostream& operator<<(std::ostream& o, const Vec2& vec) {

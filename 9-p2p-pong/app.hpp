@@ -164,9 +164,9 @@ struct App {
 
     void end_process() {
         if (app_state == AppState_WindowClosed) return;
+        Uint64 now = SDL_GetTicks64();
         if (app_state == AppState_Ongoing) {
             Logger logger("Pong");
-            Uint64 now = SDL_GetTicks64();
             delta_ms = last_frame_ms == 0 
                 ? 0
                 : now - last_frame_ms;
@@ -195,6 +195,16 @@ struct App {
             };
             manager.outgoingQueue.push(packet);
         }
+        if (is_master && now - last_ball_update_ms > 100) {
+            last_ball_update_ms = now;
+            Packet::Packet packet{
+                .type = Packet::PongBallType,
+                .data = { 
+                    .pong_ball = pong.ball.pack()
+                } 
+            };
+            manager.outgoingQueue.push(packet);
+        }
     }
 
     void draw_app() {
@@ -210,6 +220,9 @@ struct App {
                 ImGui::Separator();
 
                 if (app_state == AppState_ReadyMenu) {
+                    if (winner != Winner_None) {
+                        ImGui::Text("Winner is %s", winner == Winner_Master ? "Master" : "Client");
+                    }
                     ImGui::Text("Ready Status:");
                     ImGui::Separator();
                     
@@ -247,7 +260,7 @@ struct App {
                     ImGui::Spacing();
                     
                     // Local ready checkbox
-                    bool my_ready_value;
+                    bool my_ready_value = is_master ? master_ready : client_ready;
                     if (ImGui::Checkbox("I'm Ready!", &my_ready_value)) {
                         // Update local state
                         if (is_master) {

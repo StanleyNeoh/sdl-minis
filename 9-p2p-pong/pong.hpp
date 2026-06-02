@@ -52,7 +52,7 @@ struct Pong {
         Vec2 pos;
         Vec2 vel;
         float r;
-        Ball(float x, float y, float r = 1.0): pos(x, y), vel(Vec2::rand_unit()), r(r) {}
+        Ball(float x, float y, float r = 1.0, float v = 10.0): pos(x, y), vel(Vec2::rand_unit(v)), r(r) {}
 
         struct OverlapInfo {
             Vec2 normal;
@@ -82,10 +82,10 @@ struct Pong {
             );
         }
 
-        void reset(float x, float y) {
+        void reset(float x, float y, float v = 10.0) {
             pos.x = x;
             pos.y = y;
-            vel = Vec2::rand_unit();
+            vel = Vec2::rand_unit(v);
         }
 
         void reset(float x, float y, float vx, float vy) {
@@ -146,8 +146,8 @@ struct Pong {
     State step(float dt) {
         ball.pos.x = ball.pos.x + ball.vel.x * dt;
         ball.pos.y = ball.pos.y + ball.vel.y * dt;
-        topP.pos.x = SDL_clamp(topP.pos.x + topP.vx * dt, 0, width);
-        botP.pos.x = SDL_clamp(botP.pos.x + botP.vx * dt, 0, width);
+        topP.pos.x = SDL_clamp(topP.pos.x + topP.vx * dt, 0, width - topP.w);
+        botP.pos.x = SDL_clamp(botP.pos.x + botP.vx * dt, 0, width - botP.w);
         if (ball.pos.x < 0) {
             ball.pos.x = 0;
             if (ball.vel.x < 0) ball.vel.x = -ball.vel.x;
@@ -163,12 +163,12 @@ struct Pong {
             return State_Top_Wins;
         }
         Ball::OverlapInfo info;
-        if (ball.overlap_paddle(topP, info)) {
+        if (ball.overlap_paddle(topP, info) && info.normal.dot(ball.vel) < 0) {
             float scale = ball.vel.x * info.normal.x + ball.vel.y * info.normal.y;
             ball.vel.x -= info.normal.x * 2 * scale;
             ball.vel.y -= info.normal.y * 2 * scale;
         }
-        if (ball.overlap_paddle(botP, info)) {
+        if (ball.overlap_paddle(botP, info) && info.normal.dot(ball.vel) < 0) {
             float scale = ball.vel.x * info.normal.x + ball.vel.y * info.normal.y;
             ball.vel.x -= info.normal.x * 2 * scale;
             ball.vel.y -= info.normal.y * 2 * scale;
