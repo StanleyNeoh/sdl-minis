@@ -148,18 +148,18 @@ struct Pong {
         ball.pos.y = ball.pos.y + ball.vel.y * dt;
         topP.pos.x = SDL_clamp(topP.pos.x + topP.vx * dt, 0, width - topP.w);
         botP.pos.x = SDL_clamp(botP.pos.x + botP.vx * dt, 0, width - botP.w);
-        if (ball.pos.x < 0) {
-            ball.pos.x = 0;
+        if (ball.pos.x - ball.r < 0) {
+            ball.pos.x = ball.r;
             if (ball.vel.x < 0) ball.vel.x = -ball.vel.x;
         }
-        if (ball.pos.y < 0) {
+        if (ball.pos.y - ball.r < 0) {
             return State_Bot_Wins;
         }
-        if (ball.pos.x > width) {
-            ball.pos.x = width;
+        if (ball.pos.x + ball.r > width) {
+            ball.pos.x = width - ball.r;
             if (ball.vel.x > 0) ball.vel.x = -ball.vel.x;
         }
-        if (ball.pos.y > height) {
+        if (ball.pos.y + ball.r > height) {
             return State_Top_Wins;
         }
         Ball::OverlapInfo info;

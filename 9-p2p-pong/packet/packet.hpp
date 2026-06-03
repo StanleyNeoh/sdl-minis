@@ -102,9 +102,7 @@ namespace Packet {
             uint32_t encodedType = htonl(static_cast<uint32_t>(type));
             std::memcpy(buffer, &encodedType, sizeof(encodedType));
             
-            logger.log("Serializing...");
             if (!serialize_body(buffer + sizeof(Type))) return false;
-            logger.log("Sending...");
             return socketResource.send_exact(buffer, sizeof(Type) + Packet::body_size(type));
         }
 
