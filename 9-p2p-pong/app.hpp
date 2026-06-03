@@ -119,41 +119,49 @@ struct App {
         while (manager.incomingQueue.try_pop(packet)) {
             switch (packet.type) {
                 case Packet::ConnectResponseType: {
-                    is_master = packet.data.connect_response.is_master;
+                    auto&& connect_response = packet.body.get<Packet::ConnectResponseBody>();
+                    is_master = connect_response.is_master;
                     app_state = AppState_ReadyMenu;
                     winner = Winner_Master;
                     reset_to_state(AppState_ReadyMenu);
-                    logger.log("Connected to ", packet.data.connect_response.addr, " as ", is_master ? "Master": "Client");
+                    logger.log("Connected to ", connect_response.addr, " as ", is_master ? "Master": "Client");
                     break;
                 }
                 case Packet::DisconnectResponseType: {
-                    logger.log("Disconnected from ", packet.data.disconnect_response.addr);
+                    auto&& disconnect_response = packet.body.get<Packet::DisconnectResponseBody>();
+                    logger.log("Disconnected from ", disconnect_response.addr);
                     reset_to_state(AppState_WindowClosed);
                     break;
                 }
-                case Packet::MessageType:
-                    messages.push_back(std::string("Peer: ") + packet.data.message.message);
+                case Packet::MessageType: {
+                    auto&& message = packet.body.get<Packet::MessageBody>();
+                    messages.push_back(std::string("Peer: ") + message.message);
                     break;
+                }
                 case Packet::PongConfigType: {
-                    pong.unpack(packet.data.pong_config);
+                    auto&& pong_config = packet.body.get<Packet::PongConfigBody>();
+                    pong.unpack(pong_config);
                     reset_to_state(AppState_Ongoing);
                     break;
                 }
                 case Packet::PongReadyType: {
+                    auto&& pong_ready = packet.body.get<Packet::PongReadyBody>();
                     if (is_master) {
-                        client_ready = packet.data.pong_ready.ready;
+                        client_ready = pong_ready.ready;
                     } else {
-                        master_ready = packet.data.pong_ready.ready;
+                        master_ready = pong_ready.ready;
                     }
                     break;
                 }
                 case Packet::PongPaddleType: {
+                    auto&& pong_paddle = packet.body.get<Packet::PongPaddleBody>();
                     auto& paddle = is_master ? pong.topP : pong.botP;
-                    paddle.unpack(packet.data.pong_paddle);
+                    paddle.unpack(pong_paddle);
                     break;
                 }
                 case Packet::PongBallType: {
-                    pong.ball.unpack(packet.data.pong_ball);
+                    auto&& pong_ball = packet.body.get<Packet::PongBallBody>();
+                    pong.ball.unpack(pong_ball);
                     break;
                 }
                 default:
@@ -187,23 +195,15 @@ struct App {
         }
         if (paddle_update) {
             auto& paddle = is_master ? pong.botP : pong.topP;
-            Packet::Packet packet{
-                .type = Packet::PongPaddleType,
-                .data = { 
-                    .pong_paddle = paddle.pack()
-                } 
-            };
-            manager.outgoingQueue.push(packet);
+            manager.outgoingQueue.push(Packet::Packet::create(
+                paddle.pack()
+            ));
         }
         if (is_master && now - last_ball_update_ms > 100) {
             last_ball_update_ms = now;
-            Packet::Packet packet{
-                .type = Packet::PongBallType,
-                .data = { 
-                    .pong_ball = pong.ball.pack()
-                } 
-            };
-            manager.outgoingQueue.push(packet);
+            manager.outgoingQueue.push(Packet::Packet::create(
+                pong.ball.pack()
+            ));
         }
     }
 
@@ -268,13 +268,11 @@ struct App {
                         } else {
                             client_ready = my_ready_value;
                         }
-                        
-                        // Send ready state to peer
-                        Packet::Packet packet{
-                            .type = Packet::PongReadyType,
-                            .data = { .pong_ready = { .ready = my_ready_value } }
-                        };
-                        manager.outgoingQueue.try_push(packet);
+                        manager.outgoingQueue.try_push(Packet::Packet::create(
+                            Packet::PongReadyBody{
+                                .ready = my_ready_value
+                            }
+                        ));
                     }
                     
                     // Start game when both ready
@@ -287,13 +285,9 @@ struct App {
                             if (ImGui::Button("Start Game")) {
                                 // Reset and pack game state
                                 pong.reset();
-                                
-                                // Send config to peer (this signals game start)
-                                Packet::Packet packet{
-                                    .type = Packet::PongConfigType,
-                                    .data = { .pong_config = pong.pack() }
-                                };
-                                manager.outgoingQueue.try_push(packet);
+                                manager.outgoingQueue.try_push(Packet::Packet::create(
+                                    pong.pack()
+                                ));
                                 
                                 // Start game locally
                                 reset_to_state(AppState_Ongoing);

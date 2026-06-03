@@ -11,8 +11,8 @@
 #include "pipe.hpp"
 #include "logger.hpp"
 #include "pong.hpp"
-#include "packet.hpp"
-
+#include "packet/packet.hpp"
+#include "packet/reader.hpp"
 struct TcpManager {
     struct Config {
         u_int16_t port;
@@ -36,7 +36,6 @@ struct TcpManager {
         }
         bool disconnected = false;
         Packet::Reader reader;
-        Packet::Writer writer;
         Packet::Packet packet;
         while (!disconnected) {
             auto status = reader.recv(socketResource, packet);
@@ -56,18 +55,17 @@ struct TcpManager {
             }
 
             while (ctx->outgoingQueue.try_pop(packet)) {
-                // Use compile-time trait checking
                 if (packet.type == Packet::KillRequestType) {
                     ctx->running = false;
                 }
-                
-                if (Packet::is_disconnect(packet.type)) {
+
+                if (packet.is_disconnect()) {
                     disconnected = true;
                 }
                 
                 // Send wireable packets
-                if (Packet::is_wireable(packet.type)) {
-                    writer.send(socketResource, packet);
+                if (packet.is_wireable()) {
+                    packet.send(socketResource);
                 }
             }
         }
@@ -120,18 +118,19 @@ struct TcpManager {
             if (ctx->outgoingQueue.try_pop(packet)) {
                 switch (packet.type) {
                     case Packet::ConnectRequestType: {
+                        auto&& connect_request = packet.body.get<Packet::ConnectRequestBody>();
                         SocketResource outbound(AF_INET, SOCK_STREAM, 0);
                         if (!outbound.is_available()) {
                             logger.log("Failed to create outbound socket");
                             break;
                         }
-                        if (outbound.connect(packet.data.connect_request.addr)) {
-                            logger.log("Failed to connect to ", packet.data.connect_request.addr);
+                        if (outbound.connect(connect_request.addr)) {
+                            logger.log("Failed to connect to ", connect_request.addr);
                             break;
                         }
-                        ctx->sendConnectResponse(packet.data.connect_request.addr, false);
+                        ctx->sendConnectResponse(connect_request.addr, false);
                         io_session(ctx, std::move(outbound));
-                        ctx->sendDisconnectResponse(packet.data.connect_request.addr);
+                        ctx->sendDisconnectResponse(connect_request.addr);
                         break;
                     }
                     case Packet::KillRequestType:
@@ -150,54 +149,51 @@ struct TcpManager {
         manager_thread(manager, this) {}
 
     ~TcpManager() {
-        Packet::Packet packet{ .type = Packet::KillRequestType };
-        outgoingQueue.push(packet);
+        outgoingQueue.push(Packet::Packet::create(
+            Packet::KillRequestBody{}
+        ));
         manager_thread.join();
     }
 
     bool connect(const sockaddr_in& addr) {
-        return outgoingQueue.try_push(Packet::Packet{
-            .type = Packet::ConnectRequestType,
-            .data = { .connect_request = {
+        return outgoingQueue.try_push(Packet::Packet::create(
+            Packet::ConnectRequestBody{
                 .addr = addr
-            }}
-        });
+            }
+        ));
     }
 
     void sendConnectResponse(const sockaddr_in& addr, bool is_master) {
-        return incomingQueue.push(Packet::Packet{
-            .type = Packet::ConnectResponseType,
-            .data = { .connect_response = {
+        return incomingQueue.push(Packet::Packet::create(
+            Packet::ConnectResponseBody{
                 .addr = addr,
                 .is_master = is_master
-            }}
-        });
+            }
+        ));
     }
 
     bool disconnect() {
-        return outgoingQueue.try_push(Packet::Packet{
-            .type = Packet::DisconnectRequestType,
-        });
+        return outgoingQueue.try_push(Packet::Packet::create(
+            Packet::DisconnectRequestBody{}
+        ));
     }
 
     void sendDisconnectResponse(const sockaddr_in& addr) {
-        incomingQueue.push(Packet::Packet{
-            .type = Packet::DisconnectResponseType,
-            .data = { .disconnect_response = {
+        incomingQueue.push(Packet::Packet::create(
+            Packet::DisconnectResponseBody{
                 .addr = addr,
-            }}
-        });
+            }
+        ));
     }
 
     bool sendMessage(const char* msg) {
-        Packet::Packet packet{ .type = Packet::MessageType };
-        std::memset(packet.data.message.message, 0, sizeof(packet.data.message.message));
+        Packet::MessageBody message;
+        std::memset(message.message, 0, sizeof(message.message));
         if (msg) {
-            std::strncpy(packet.data.message.message, msg, sizeof(packet.data.message.message) - 1);
+            std::strncpy(message.message, msg, sizeof(message.message) - 1);
         }
-        return outgoingQueue.try_push(packet);
+        return outgoingQueue.try_push(Packet::Packet::create(message));
     }
-
 };
 
 #endif

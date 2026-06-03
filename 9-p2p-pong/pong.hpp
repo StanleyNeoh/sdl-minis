@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <iostream>
 #include "utils.hpp"
-#include "packet.hpp"
+#include "packet/packet.hpp"
 
 struct Pong {
     enum State {
@@ -35,13 +35,13 @@ struct Pong {
             return o;
         }
 
-        void unpack(const Packet::PongPaddlePacket& padpac) {
-            pos.x = padpac.pos_x;
-            vx = padpac.vel_x;
+        void unpack(const Packet::PongPaddleBody& padbody) {
+            pos.x = padbody.pos_x;
+            vx = padbody.vel_x;
         }
 
-        Packet::PongPaddlePacket pack() const {
-            return Packet::PongPaddlePacket{
+        Packet::PongPaddleBody pack() const {
+            return Packet::PongPaddleBody{
                 .pos_x = pos.x,
                 .vel_x = vx
             };
@@ -100,17 +100,17 @@ struct Pong {
             return o;
         }
 
-        void unpack(const Packet::PongBallPacket& ballpac)  {
+        void unpack(const Packet::PongBallBody& ballbody)  {
             reset(
-                ballpac.ball_pos_x,
-                ballpac.ball_pos_y,
-                ballpac.ball_vel_x,
-                ballpac.ball_vel_y
+                ballbody.ball_pos_x,
+                ballbody.ball_pos_y,
+                ballbody.ball_vel_x,
+                ballbody.ball_vel_y
             );
         }
 
-        Packet::PongBallPacket pack() const {
-            return Packet::PongBallPacket{
+        Packet::PongBallBody pack() const {
+            return Packet::PongBallBody{
                 .ball_pos_x = pos.x,
                 .ball_pos_y = pos.y,
                 .ball_vel_x = vel.x,
@@ -185,7 +185,7 @@ struct Pong {
         return o;
     }
 
-    void unpack(const Packet::PongConfigPacket& config) {
+    void unpack(const Packet::PongConfigBody& config) {
         width = config.width;
         height = config.height;
         pad_w = config.pad_w;
@@ -209,8 +209,8 @@ struct Pong {
         );
     }
 
-    Packet::PongConfigPacket pack() const {
-        return Packet::PongConfigPacket{
+    Packet::PongConfigBody pack() const {
+        return Packet::PongConfigBody{
             .width = width,
             .height = height,
             .pad_w = pad_w,
