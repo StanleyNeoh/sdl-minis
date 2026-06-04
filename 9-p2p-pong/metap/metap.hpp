@@ -8,6 +8,14 @@ namespace MetaP {
     struct TV_True {
         constexpr static bool value = true;
     };
+
+    template <typename T>
+    struct TT_Identity {
+        template <typename U>
+        static decltype(auto) f(U&& arg) {
+            return std::forward<U>(arg);
+        }
+    };
 }
 
 #include "typelist.hpp"

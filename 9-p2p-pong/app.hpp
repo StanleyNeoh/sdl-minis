@@ -117,7 +117,7 @@ struct App {
 
         Packet::Packet packet;
         while (manager.incomingQueue.try_pop(packet)) {
-            Packet::Dispatcher::dispatch(packet,
+            MetaP::Callbacks(
                 [&](const Packet::ConnectResponseBody& connect_response) {
                     is_master = connect_response.is_master;
                     app_state = AppState_ReadyMenu;
@@ -150,7 +150,10 @@ struct App {
                 [&](const Packet::PongBallBody& pong_ball) {
                     pong.ball.unpack(pong_ball);
                 }
-            );
+            ).dispatch<
+                MetaP::TT_TVIsEquals<Packet::TV_BodyType>::type,
+                MetaP::TT_VariantCast
+            >(packet.type, packet.body);
         }
     }
 

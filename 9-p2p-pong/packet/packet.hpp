@@ -52,7 +52,7 @@ namespace Packet {
         }
 
         bool serialize_body(char* buffer) const {
-            return MetaP::TO_VariantDispatch<
+            return MetaP::TO_DispatchVariant<
                 TV_IsWireable, 
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 TO_Serialize,
@@ -61,7 +61,7 @@ namespace Packet {
         }
 
         bool deserialize_body(Type type, const char* buffer) {
-            return MetaP::TO_VariantDispatch<
+            return MetaP::TO_DispatchVariant<
                 TV_IsWireable, 
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 TO_Deserialize, 
@@ -70,7 +70,7 @@ namespace Packet {
         }
 
         static size_t body_size(Type type) {
-            return MetaP::TO_Dispatch<
+            return MetaP::TO_DispatchList<
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 MetaP::TT_TVToTO<TV_BodySize>::type, 
                 BodyRegistry
@@ -78,7 +78,7 @@ namespace Packet {
         }
 
         bool is_wireable() {
-            return MetaP::TO_Dispatch<
+            return MetaP::TO_DispatchList<
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 MetaP::TT_TVToTO<TV_IsWireable>::type, 
                 BodyRegistry
@@ -86,7 +86,7 @@ namespace Packet {
         }
 
         bool is_disconnect() {
-            return MetaP::TO_Dispatch<
+            return MetaP::TO_DispatchList<
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 MetaP::TT_TVToTO<TV_IsDisconnect>::type, 
                 BodyRegistry
@@ -109,42 +109,6 @@ namespace Packet {
             return body.get<Body>();
         }
     };
-
-    namespace Dispatcher { 
-        template <typename F>
-        struct Handler {
-            using FirstArg = typename MetaP::TT_FirstArg<F>::type;
-            F func;
-            Handler(F&& f): func(std::forward<F>(f)) {}
-
-            template <typename... Args>
-            decltype(auto) operator()(Args&&... args) {
-                return func(std::forward<Args>(args)...);
-            }
-        };
-
-        template <
-            typename V,
-            typename T, 
-            typename... Ts
-        >
-        static bool _dispatch(V&& variant, Type type, T&& first, Ts&&... rest) {
-            using BodyType = std::decay_t<typename MetaP::TT_FirstArg<std::decay_t<T>>::type>;
-            if (TV_BodyType<BodyType>::value == type) {
-                first(std::forward<V>(variant).template get<BodyType>());
-                return true;
-            }
-            if constexpr (sizeof...(Ts) > 0) {
-                return _dispatch(std::forward<V>(variant), type, std::forward<Ts>(rest)...);
-            }
-            return false;
-        }
-
-        template <typename... Handlers>
-        static bool dispatch(Packet& packet, Handlers&&... handlers) {
-            return _dispatch(packet.body, packet.type, std::forward<Handlers>(handlers)...);
-        }
-    }
 }
 
 #endif
