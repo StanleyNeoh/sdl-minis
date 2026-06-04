@@ -6,45 +6,14 @@
 #include <utility>
 
 namespace MetaP {
-    template<typename A>
-    union VariantL<TD_List<A>> {
-        A data;
-        
-        VariantL() : data() {}
-        ~VariantL() {}
-
-        VariantL(const VariantL& other) {
-            std::memcpy(this, &other, sizeof(VariantL));
-        }
-
-        VariantL(VariantL&& other) noexcept {
-            std::memcpy(this, &other, sizeof(VariantL));
-        }
-
-        VariantL& operator=(const VariantL& other) {
-            if (this != &other) {
-                std::memcpy(this, &other, sizeof(VariantL));
-            }
-            return *this;
-        }
-
-        VariantL& operator=(VariantL&& other) noexcept {
-            if (this != &other) {
-                std::memcpy(this, &other, sizeof(VariantL));
-            }
-            return *this;
-        }
-
-        template <typename T>
-        decltype(auto) get() {
-            return TO_GetFirst<T, VariantL<TD_List<A>>>::f(*this);
-        }
-    };
-
     template<typename A, typename... Ts>
     union VariantL<TD_List<A, Ts...>> {
         A data;
-        VariantL<TD_List<Ts...>> next;
+        std::conditional_t<
+            (sizeof...(Ts) > 0),
+            VariantL<TD_List<Ts...>>,
+            struct {}
+        > next;
         
         VariantL() : data() {}
         ~VariantL() {}
