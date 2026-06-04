@@ -26,10 +26,10 @@ namespace MetaP {
 
     template <
         template<typename> typename TO_Pred,
-        template<typename> typename TO_OP,
+        template<typename> typename TO_Op,
         typename _List
     >
-    struct TO_FindAndOperateList;
+    struct TO_Dispatch;
 
     template<typename _List>
     union VariantL;
@@ -46,7 +46,7 @@ namespace MetaP {
         template<typename> typename TOOp, 
         typename _Variant
     >
-    struct TO_FindAndOperateVariant;
+    struct TO_DispatchVariant;
 
 }
 

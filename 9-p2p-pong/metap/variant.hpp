@@ -60,20 +60,6 @@ namespace MetaP {
         }
     };
 
-    // Base case: empty list
-    template<
-        template<typename> typename TV_Include,
-        template<typename> typename TO_Pred, 
-        template<typename> typename TO_Op
-    >
-    struct TO_FindAndOperateVariant<TV_Include, TO_Pred, TO_Op, VariantL<TD_List<>>> {
-        template<typename V, typename K, typename... Args>
-        constexpr static auto f(V&&, K&&, Args&&... args) {
-            return TO_Op<void>::f(nullptr, std::forward<Args>(args)...);
-        }
-    };
-
-    // Recursive case
     template<
         template<typename> typename TV_Include,
         template<typename> typename TO_Pred, 
@@ -81,16 +67,16 @@ namespace MetaP {
         typename T, 
         typename... Ts
     >
-    struct TO_FindAndOperateVariant<TV_Include, TO_Pred, TO_Op, VariantL<TD_List<T, Ts...>>> {
+    struct TO_DispatchVariant<TV_Include, TO_Pred, TO_Op, VariantL<TD_List<T, Ts...>>> {
         template<typename V, typename K, typename... Args>
-        constexpr static auto f(V&& member, K&& key, Args&&... args) {
+        constexpr static decltype(auto) f(V&& member, K&& key, Args&&... args) {
             if constexpr (TV_Include<T>::value) {
                 if (TO_Pred<T>::f(std::forward<K>(key))) {
                     return TO_Op<T>::f(&std::forward<V>(member).data, std::forward<Args>(args)...);
                 }
             }
             if constexpr (sizeof...(Ts) > 0) {
-                return TO_FindAndOperateVariant<TV_Include, TO_Pred, TO_Op, VariantL<TD_List<Ts...>>>::f(
+                return TO_DispatchVariant<TV_Include, TO_Pred, TO_Op, VariantL<TD_List<Ts...>>>::f(
                     std::forward<V>(member).next, 
                     std::forward<K>(key), 
                     std::forward<Args>(args)...
