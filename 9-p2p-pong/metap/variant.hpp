@@ -6,13 +6,14 @@
 #include <utility>
 
 namespace MetaP {
+    struct EmptyStruct {};
     template<typename A, typename... Ts>
     union VariantL<TD_List<A, Ts...>> {
         A data;
         std::conditional_t<
             (sizeof...(Ts) > 0),
             VariantL<TD_List<Ts...>>,
-            struct {}
+            EmptyStruct
         > next;
         
         VariantL() : data() {}

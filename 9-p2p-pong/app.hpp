@@ -117,56 +117,40 @@ struct App {
 
         Packet::Packet packet;
         while (manager.incomingQueue.try_pop(packet)) {
-            switch (packet.type) {
-                case Packet::ConnectResponseType: {
-                    auto&& connect_response = packet.body.get<Packet::ConnectResponseBody>();
+            Packet::Dispatcher::dispatch(packet,
+                [&](const Packet::ConnectResponseBody& connect_response) {
                     is_master = connect_response.is_master;
                     app_state = AppState_ReadyMenu;
                     winner = Winner_Master;
                     reset_to_state(AppState_ReadyMenu);
                     logger.log("Connected to ", connect_response.addr, " as ", is_master ? "Master": "Client");
-                    break;
-                }
-                case Packet::DisconnectResponseType: {
-                    auto&& disconnect_response = packet.body.get<Packet::DisconnectResponseBody>();
+                },
+                [&](const Packet::DisconnectResponseBody& disconnect_response) {
                     logger.log("Disconnected from ", disconnect_response.addr);
                     reset_to_state(AppState_WindowClosed);
-                    break;
-                }
-                case Packet::MessageType: {
-                    auto&& message = packet.body.get<Packet::MessageBody>();
+                },
+                [&](const Packet::MessageBody& message) {
                     messages.push_back(std::string("Peer: ") + message.message);
-                    break;
-                }
-                case Packet::PongConfigType: {
-                    auto&& pong_config = packet.body.get<Packet::PongConfigBody>();
+                },
+                [&](const Packet::PongConfigBody& pong_config) {
                     pong.unpack(pong_config);
                     reset_to_state(AppState_Ongoing);
-                    break;
-                }
-                case Packet::PongReadyType: {
-                    auto&& pong_ready = packet.body.get<Packet::PongReadyBody>();
+                },
+                [&](const Packet::PongReadyBody& pong_ready) {
                     if (is_master) {
                         client_ready = pong_ready.ready;
                     } else {
                         master_ready = pong_ready.ready;
                     }
-                    break;
-                }
-                case Packet::PongPaddleType: {
-                    auto&& pong_paddle = packet.body.get<Packet::PongPaddleBody>();
+                },
+                [&](const Packet::PongPaddleBody& pong_paddle) {
                     auto& paddle = is_master ? pong.topP : pong.botP;
                     paddle.unpack(pong_paddle);
-                    break;
-                }
-                case Packet::PongBallType: {
-                    auto&& pong_ball = packet.body.get<Packet::PongBallBody>();
+                },
+                [&](const Packet::PongBallBody& pong_ball) {
                     pong.ball.unpack(pong_ball);
-                    break;
                 }
-                default:
-                    break;
-            }
+            );
         }
     }
 

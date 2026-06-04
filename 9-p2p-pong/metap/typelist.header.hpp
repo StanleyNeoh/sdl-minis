@@ -7,6 +7,9 @@ namespace MetaP {
     template <typename... T>
     struct TD_List;
 
+    template <typename _List>
+    struct TT_First;
+
     template <bool include, typename T, typename _List>
     struct TT_CondPrepend;
 

@@ -3,6 +3,9 @@
 
 namespace MetaP {
     template <typename T>
+    struct TT_Args;
+
+    template <typename T>
     struct TT_FirstArg;
 }
 

@@ -92,17 +92,17 @@ namespace Packet {
 
     template <>
     struct TO_Serialize<PongConfigBody> {
-        static constexpr bool f(const _Body* body, char* buf) {
+        static bool f(const PongConfigBody* body, char* buf) {
             return body->serialize(buf);
         }
     };
 
     template <>
     struct TO_Deserialize<PongConfigBody> {
-        static constexpr bool f(_Body* body, const char* buf) {
+        static bool f(PongConfigBody* body, const char* buf) {
             return body->deserialize(buf);
         }
-    }
+    };
 }
 
 #endif

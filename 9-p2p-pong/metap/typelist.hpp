@@ -5,6 +5,14 @@
 #include <utility>
 
 namespace MetaP {
+
+    template <> 
+    struct TT_First<TD_List<>> {};
+    template <typename T, typename... Ts> 
+    struct TT_First<TD_List<T, Ts...>> {
+        using type = T;
+    };
+
     template <typename T, typename... Ts>
     struct TT_CondPrepend<true, T, TD_List<Ts...>> {
         using type = TD_List<T, Ts...>;
