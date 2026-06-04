@@ -1,7 +1,7 @@
-#ifndef METAP_TYPELIST
-#define METAP_TYPELIST
+#ifndef METAP_TYPELIST_HPP
+#define METAP_TYPELIST_HPP
 
-#include "headers.hpp"
+#include "typelist.header.hpp"
 #include <utility>
 
 namespace MetaP {

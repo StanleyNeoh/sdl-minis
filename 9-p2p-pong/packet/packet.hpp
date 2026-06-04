@@ -3,9 +3,7 @@
 
 #include <cstring>
 #include <new>
-#include "../metap/typelist.hpp"
-#include "../metap/variant.hpp"
-#include "../metap/functional.hpp"
+#include "../metap/metap.hpp"
 #include "../platform_socket.hpp"
 #include "type.hpp"
 
@@ -54,7 +52,7 @@ namespace Packet {
         }
 
         bool serialize_body(char* buffer) const {
-            return MetaP::TO_DispatchVariant<
+            return MetaP::TO_VariantDispatch<
                 TV_IsWireable, 
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 TO_Serialize,
@@ -63,7 +61,7 @@ namespace Packet {
         }
 
         bool deserialize_body(Type type, const char* buffer) {
-            return MetaP::TO_DispatchVariant<
+            return MetaP::TO_VariantDispatch<
                 TV_IsWireable, 
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 TO_Deserialize, 
@@ -107,7 +105,7 @@ namespace Packet {
         }
 
         template <typename Body>
-        auto&& get() {
+        decltype(auto) get() {
             return body.get<Body>();
         }
     };

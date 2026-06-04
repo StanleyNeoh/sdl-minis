@@ -1,7 +1,7 @@
-#ifndef METAP_UNION_HPP
-#define METAP_UNION_HPP
+#ifndef METAP_VARIANT_HPP
+#define METAP_VARIANT_HPP
 
-#include "headers.hpp"
+#include "variant.header.hpp"
 #include <cstring>
 #include <utility>
 
@@ -42,18 +42,18 @@ namespace MetaP {
 
         template <typename T>
         decltype(auto) get() {
-            return TO_GetFirst<T, VariantL<TD_List<A, Ts...>>>::f(*this);
+            return TO_VariantGet<T, VariantL<TD_List<A, Ts...>>>::f(*this);
         }
     };
 
     template<typename T, typename A, typename... Ts>
-    struct TO_GetFirst<T, VariantL<TD_List<A, Ts...>>> {
+    struct TO_VariantGet<T, VariantL<TD_List<A, Ts...>>> {
         template<typename V>
         static decltype(auto) f(V&& variant) {
             if constexpr (std::is_same_v<T, A>) {
                 return std::forward<V>(variant).data;
             } else if constexpr (sizeof...(Ts) > 0) {
-                return TO_GetFirst<T, VariantL<TD_List<Ts...>>>::f(std::forward<V>(variant).next);
+                return TO_VariantGet<T, VariantL<TD_List<Ts...>>>::f(std::forward<V>(variant).next);
             } else {
                 static_assert(std::is_same_v<T, A>, "Type not found in variant");
             }
@@ -67,7 +67,7 @@ namespace MetaP {
         typename T, 
         typename... Ts
     >
-    struct TO_DispatchVariant<TV_Include, TO_Pred, TO_Op, VariantL<TD_List<T, Ts...>>> {
+    struct TO_VariantDispatch<TV_Include, TO_Pred, TO_Op, VariantL<TD_List<T, Ts...>>> {
         template<typename V, typename K, typename... Args>
         constexpr static decltype(auto) f(V&& member, K&& key, Args&&... args) {
             if constexpr (TV_Include<T>::value) {
@@ -76,7 +76,7 @@ namespace MetaP {
                 }
             }
             if constexpr (sizeof...(Ts) > 0) {
-                return TO_DispatchVariant<TV_Include, TO_Pred, TO_Op, VariantL<TD_List<Ts...>>>::f(
+                return TO_VariantDispatch<TV_Include, TO_Pred, TO_Op, VariantL<TD_List<Ts...>>>::f(
                     std::forward<V>(member).next, 
                     std::forward<K>(key), 
                     std::forward<Args>(args)...

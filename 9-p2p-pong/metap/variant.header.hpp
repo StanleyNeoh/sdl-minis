@@ -1,0 +1,23 @@
+#ifndef METAP_VARIANT_HEADER_HPP
+#define METAP_VARIANT_HEADER_HPP
+
+namespace MetaP {
+    template<typename _List>
+    union VariantL;
+
+    template<typename... Ts>
+    using Variant = VariantL<TD_List<Ts...>>;
+
+    template<typename T, typename _Iter>
+    struct TO_VariantGet;
+
+    template<
+        template<typename> typename TV_Include,
+        template<typename> typename TO_Pred, 
+        template<typename> typename TOOp, 
+        typename _Variant
+    >
+    struct TO_VariantDispatch;
+}
+
+#endif
