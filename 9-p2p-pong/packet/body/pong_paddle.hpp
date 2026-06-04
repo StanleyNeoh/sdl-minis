@@ -34,10 +34,6 @@ namespace Packet {
             mmemcpy(ptr, vel_x);
             return true;
         }
-
-        static constexpr size_t size() {
-            return sizeof(PongPaddleBody) / sizeof(float) * sizeof(uint32_t);
-        }
     };
 
     template <>
@@ -54,6 +50,20 @@ namespace Packet {
     struct TV_BodySize<PongPaddleBody> {
         constexpr static size_t value = sizeof(PongPaddleBody) / sizeof(float) * sizeof(uint32_t);
     };
+
+    template <>
+    struct TO_Serialize<PongPaddleBody> {
+        static constexpr bool f(const _Body* body, char* buf) {
+            return body->serialize(buf);
+        }
+    };
+
+    template <>
+    struct TO_Deserialize<PongPaddleBody> {
+        static constexpr bool f(_Body* body, const char* buf) {
+            return body->deserialize(buf);
+        }
+    }
 }
 
 #endif

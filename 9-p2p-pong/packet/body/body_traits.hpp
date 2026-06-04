@@ -29,28 +29,14 @@ namespace Packet {
 
     template<typename _Body>
     struct TO_Serialize {
-        static constexpr bool f(const _Body* body, char* buf) {
-            return body->serialize(buf);
-        }
-    };
-
-    template<>
-    struct TO_Serialize<void> {
-        static constexpr bool f(const void*, char*) {
+        static constexpr bool f(const _Body*, char*) {
             return false;
         }
     };
 
     template<typename _Body>
     struct TO_Deserialize {
-        static constexpr bool f(_Body* body, const char* buf) {
-            return body->deserialize(buf);
-        }
-    };
-
-    template<>
-    struct TO_Deserialize<void> {
-        static constexpr bool f(void*, const char*) {
+        static constexpr bool f(_Body*, const char*) {
             return false;
         }
     };

@@ -18,10 +18,6 @@ namespace Packet {
             memcpy(&ready, buf, sizeof(ready));
             return true;
         }
-
-        static constexpr size_t size() {
-            return sizeof(ready);
-        }
     };
 
     template <>
@@ -38,6 +34,20 @@ namespace Packet {
     struct TV_BodySize<PongReadyBody> {
         constexpr static size_t value = sizeof(PongReadyBody::ready);
     };
+
+    template <>
+    struct TO_Serialize<PongReadyBody> {
+        static constexpr bool f(const _Body* body, char* buf) {
+            return body->serialize(buf);
+        }
+    };
+
+    template <>
+    struct TO_Deserialize<PongReadyBody> {
+        static constexpr bool f(_Body* body, const char* buf) {
+            return body->deserialize(buf);
+        }
+    }
 }
 
 #endif
