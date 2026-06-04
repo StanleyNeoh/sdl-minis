@@ -79,7 +79,7 @@ namespace MetaP {
                 using FirstArgType = std::decay_t<typename TT_FirstArg<FuncType>::type>;
                 if (TO_Pred<FirstArgType>::f(std::forward<T>(key))) {
                     // Delegate to call() which will dispatch based on type
-                    _call<0>(std::forward<CT>(funcs), TT_FirstArgCast<FirstArgType>::f(arg), std::forward<Us>(args)...);
+                    _call<I>(std::forward<CT>(funcs), TT_FirstArgCast<FirstArgType>::f(arg), std::forward<Us>(args)...);
                     return true;
                 }
                 return _dispatch<I+1, TO_Pred, TT_FirstArgCast>(std::forward<CT>(funcs), std::forward<T>(key), std::forward<U>(arg), std::forward<Us>(args)...);

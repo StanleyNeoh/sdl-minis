@@ -115,42 +115,44 @@ struct App {
         Logger logger("App");
         discover.process_events();
 
+        static MetaP::Callbacks callbacks(
+            [&](const Packet::ConnectResponseBody& connect_response) {
+                is_master = connect_response.is_master;
+                app_state = AppState_ReadyMenu;
+                winner = Winner_Master;
+                reset_to_state(AppState_ReadyMenu);
+                logger.log("Connected to ", connect_response.addr, " as ", is_master ? "Master": "Client");
+            },
+            [&](const Packet::DisconnectResponseBody& disconnect_response) {
+                logger.log("Disconnected from ", disconnect_response.addr);
+                reset_to_state(AppState_WindowClosed);
+            },
+            [&](const Packet::MessageBody& message) {
+                messages.push_back(std::string("Peer: ") + message.message);
+            },
+            [&](const Packet::PongConfigBody& pong_config) {
+                pong.unpack(pong_config);
+                reset_to_state(AppState_Ongoing);
+            },
+            [&](const Packet::PongReadyBody& pong_ready) {
+                if (is_master) {
+                    client_ready = pong_ready.ready;
+                } else {
+                    master_ready = pong_ready.ready;
+                }
+            },
+            [&](const Packet::PongPaddleBody& pong_paddle) {
+                auto& paddle = is_master ? pong.topP : pong.botP;
+                paddle.unpack(pong_paddle);
+            },
+            [&](const Packet::PongBallBody& pong_ball) {
+                pong.ball.unpack(pong_ball);
+            }
+        );
+
         Packet::Packet packet;
         while (manager.incomingQueue.try_pop(packet)) {
-            MetaP::Callbacks(
-                [&](const Packet::ConnectResponseBody& connect_response) {
-                    is_master = connect_response.is_master;
-                    app_state = AppState_ReadyMenu;
-                    winner = Winner_Master;
-                    reset_to_state(AppState_ReadyMenu);
-                    logger.log("Connected to ", connect_response.addr, " as ", is_master ? "Master": "Client");
-                },
-                [&](const Packet::DisconnectResponseBody& disconnect_response) {
-                    logger.log("Disconnected from ", disconnect_response.addr);
-                    reset_to_state(AppState_WindowClosed);
-                },
-                [&](const Packet::MessageBody& message) {
-                    messages.push_back(std::string("Peer: ") + message.message);
-                },
-                [&](const Packet::PongConfigBody& pong_config) {
-                    pong.unpack(pong_config);
-                    reset_to_state(AppState_Ongoing);
-                },
-                [&](const Packet::PongReadyBody& pong_ready) {
-                    if (is_master) {
-                        client_ready = pong_ready.ready;
-                    } else {
-                        master_ready = pong_ready.ready;
-                    }
-                },
-                [&](const Packet::PongPaddleBody& pong_paddle) {
-                    auto& paddle = is_master ? pong.topP : pong.botP;
-                    paddle.unpack(pong_paddle);
-                },
-                [&](const Packet::PongBallBody& pong_ball) {
-                    pong.ball.unpack(pong_ball);
-                }
-            ).dispatch<
+            callbacks.dispatch<
                 MetaP::TT_TVIsEquals<Packet::TV_BodyType>::type,
                 MetaP::TT_VariantCast
             >(packet.type, packet.body);
