@@ -10,7 +10,7 @@ namespace MetaP {
     };
 
     template <typename T>
-    struct TT_Identity {
+    struct TO_Identity {
         template <typename U>
         static decltype(auto) f(U&& arg) {
             return std::forward<U>(arg);

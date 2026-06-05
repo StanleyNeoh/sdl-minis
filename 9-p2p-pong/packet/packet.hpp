@@ -52,7 +52,7 @@ namespace Packet {
         }
 
         bool serialize_body(char* buffer) const {
-            return MetaP::TO_DispatchVariant<
+            return MetaP::TO_VariantDispatch<
                 TV_IsWireable, 
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 TO_Serialize,
@@ -61,7 +61,7 @@ namespace Packet {
         }
 
         bool deserialize_body(Type type, const char* buffer) {
-            return MetaP::TO_DispatchVariant<
+            return MetaP::TO_VariantDispatch<
                 TV_IsWireable, 
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 TO_Deserialize, 
@@ -70,7 +70,7 @@ namespace Packet {
         }
 
         static size_t body_size(Type type) {
-            return MetaP::TO_DispatchList<
+            return MetaP::TO_ListDispatch<
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 MetaP::TT_TVToTO<TV_BodySize>::type, 
                 BodyRegistry
@@ -78,7 +78,7 @@ namespace Packet {
         }
 
         bool is_wireable() {
-            return MetaP::TO_DispatchList<
+            return MetaP::TO_ListDispatch<
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 MetaP::TT_TVToTO<TV_IsWireable>::type, 
                 BodyRegistry
@@ -86,7 +86,7 @@ namespace Packet {
         }
 
         bool is_disconnect() {
-            return MetaP::TO_DispatchList<
+            return MetaP::TO_ListDispatch<
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 MetaP::TT_TVToTO<TV_IsDisconnect>::type, 
                 BodyRegistry

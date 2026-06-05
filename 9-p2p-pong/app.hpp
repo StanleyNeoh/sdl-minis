@@ -154,7 +154,7 @@ struct App {
         while (manager.incomingQueue.try_pop(packet)) {
             callbacks.dispatch<
                 MetaP::TT_TVIsEquals<Packet::TV_BodyType>::type,
-                MetaP::TT_VariantCast
+                MetaP::TO_VariantCast
             >(packet.type, packet.body);
         }
     }

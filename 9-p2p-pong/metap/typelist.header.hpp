@@ -27,7 +27,7 @@ namespace MetaP {
         template<typename> typename TO_Op,
         typename _List
     >
-    struct TO_DispatchList;
+    struct TO_ListDispatch;
 };
 
 #endif

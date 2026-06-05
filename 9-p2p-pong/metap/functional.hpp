@@ -1,8 +1,7 @@
-#ifndef METAP_FUNCTIONAL
-#define METAP_FUNCTIONAL
+#ifndef METAP_FUNCTIONAL_HPP
+#define METAP_FUNCTIONAL_HPP
 
-#include <type_traits>
-
+#include "functional.header.hpp"
 namespace MetaP {
     template <
         template<typename> typename TV

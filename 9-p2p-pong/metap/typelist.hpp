@@ -57,14 +57,14 @@ namespace MetaP {
         typename T,
         typename... Ts
     >
-    struct TO_DispatchList<TO_Pred, TO_Op, TD_List<T, Ts...>> {
+    struct TO_ListDispatch<TO_Pred, TO_Op, TD_List<T, Ts...>> {
         template<typename K, typename... Args>
         constexpr static decltype(auto) f(K&& key, Args&&... args) {
             if (TO_Pred<T>::f(std::forward<K>(key))) {
                 return TO_Op<T>::f(std::forward<Args>(args)...);
             }
             if constexpr (sizeof...(Ts) > 0) {
-                return TO_DispatchList<TO_Pred, TO_Op, TD_List<Ts...>>::f(
+                return TO_ListDispatch<TO_Pred, TO_Op, TD_List<Ts...>>::f(
                     std::forward<K>(key),
                     std::forward<Args>(args)...
                 );

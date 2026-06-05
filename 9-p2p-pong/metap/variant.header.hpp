@@ -7,13 +7,12 @@ namespace MetaP {
 
     template<typename... Ts>
     using Variant = VariantL<TD_List<Ts...>>;
+
+    template<typename A, typename _Iter>
+    struct TO_VariantGet;
+
     template <typename T>
-    struct TT_VariantCast {
-        template <typename V>
-        static decltype(auto) f(V&& variant) {
-            return std::forward<V>(variant).template get<T>();
-        }
-    };
+    struct TO_VariantCast;
 
     template<
         template<typename> typename TV_Include,
@@ -21,7 +20,7 @@ namespace MetaP {
         template<typename> typename TOOp, 
         typename _Variant
     >
-    struct TO_DispatchVariant;
+    struct TO_VariantDispatch;
 }
 
 #endif
