@@ -8,53 +8,53 @@
 namespace MetaP {
     struct EmptyStruct {};
     template<typename T, typename... Ts>
-    union VariantL<TD_List<T, Ts...>> {
+    union Variant<TD_List<T, Ts...>> {
         T data;
         std::conditional_t<
             (sizeof...(Ts) > 0),
-            VariantL<TD_List<Ts...>>,
+            Variant<TD_List<Ts...>>,
             EmptyStruct
         > next;
         
-        VariantL() : data() {}
-        ~VariantL() {}
+        Variant() : data() {}
+        ~Variant() {}
 
-        VariantL(const VariantL& other) {
-            std::memcpy(this, &other, sizeof(VariantL));
+        Variant(const Variant& other) {
+            std::memcpy(this, &other, sizeof(Variant));
         }
 
-        VariantL(VariantL&& other) noexcept {
-            std::memcpy(this, &other, sizeof(VariantL));
+        Variant(Variant&& other) noexcept {
+            std::memcpy(this, &other, sizeof(Variant));
         }
 
-        VariantL& operator=(const VariantL& other) {
+        Variant& operator=(const Variant& other) {
             if (this != &other) {
-                std::memcpy(this, &other, sizeof(VariantL));
+                std::memcpy(this, &other, sizeof(Variant));
             }
             return *this;
         }
 
-        VariantL& operator=(VariantL&& other) noexcept {
+        Variant& operator=(Variant&& other) noexcept {
             if (this != &other) {
-                std::memcpy(this, &other, sizeof(VariantL));
+                std::memcpy(this, &other, sizeof(Variant));
             }
             return *this;
         }
 
         template <typename A>
         decltype(auto) get() {
-            return TO_VariantGet<A, VariantL<TD_List<T, Ts...>>>::f(*this);
+            return TO_VariantGet<A, Variant<TD_List<T, Ts...>>>::f(*this);
         }
     }; 
 
     template<typename A, typename U, typename... Us>
-    struct TO_VariantGet<A, VariantL<TD_List<U, Us...>>> {
+    struct TO_VariantGet<A, Variant<TD_List<U, Us...>>> {
         template<typename V>
         static decltype(auto) f(V&& variant) {
             if constexpr (std::is_same_v<A, U>) {
                 return std::forward<V>(variant).data;
             } else if constexpr (sizeof...(Us) > 0) {
-                return TO_VariantGet<A, VariantL<TD_List<Us...>>>::f(std::forward<V>(variant).next);
+                return TO_VariantGet<A, Variant<TD_List<Us...>>>::f(std::forward<V>(variant).next);
             } else {
                 static_assert(std::is_same_v<A, U>, "Type not found in variant");
             }
@@ -76,7 +76,7 @@ namespace MetaP {
         typename T, 
         typename... Ts
     >
-    struct TO_VariantDispatch<TV_Include, TO_Pred, TO_Op, VariantL<TD_List<T, Ts...>>> {
+    struct TO_VariantDispatch<TV_Include, TO_Pred, TO_Op, Variant<TD_List<T, Ts...>>> {
         template<typename V, typename K, typename... Args>
         constexpr static decltype(auto) f(V&& member, K&& key, Args&&... args) {
             if constexpr (TV_Include<T>::value) {
@@ -85,7 +85,7 @@ namespace MetaP {
                 }
             }
             if constexpr (sizeof...(Ts) > 0) {
-                return TO_VariantDispatch<TV_Include, TO_Pred, TO_Op, VariantL<TD_List<Ts...>>>::f(
+                return TO_VariantDispatch<TV_Include, TO_Pred, TO_Op, Variant<TD_List<Ts...>>>::f(
                     std::forward<V>(member).next, 
                     std::forward<K>(key), 
                     std::forward<Args>(args)...

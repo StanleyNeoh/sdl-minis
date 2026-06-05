@@ -3,10 +3,7 @@
 
 namespace MetaP {
     template<typename _List>
-    union VariantL;
-
-    template<typename... Ts>
-    using Variant = VariantL<TD_List<Ts...>>;
+    union Variant;
 
     template<typename A, typename _Iter>
     struct TO_VariantGet;

@@ -21,7 +21,7 @@
 #include "body/pong_ball.hpp"
 
 namespace Packet {
-    using BodyRegistry = MetaP::TD_List<
+    using BodyList = MetaP::TD_List<
         UninitializedBody,
         ConnectRequestBody,
         ConnectResponseBody,
@@ -35,10 +35,10 @@ namespace Packet {
         PongBallBody
     >;
 
-    using Variant = MetaP::VariantL<BodyRegistry>;
+    using _Variant = MetaP::Variant<BodyList>;
     struct Packet {
         Type type = UninitializedType;
-        Variant body;
+        _Variant body;
 
         template <typename _Body>
         static Packet create(_Body&& body) {
@@ -56,7 +56,7 @@ namespace Packet {
                 TV_IsWireable, 
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 TO_Serialize,
-                Variant
+                _Variant
             >::f(body, type, buffer);
         }
 
@@ -65,7 +65,7 @@ namespace Packet {
                 TV_IsWireable, 
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 TO_Deserialize, 
-                Variant
+                _Variant
             >::f(body, type, buffer);
         }
 
@@ -73,7 +73,7 @@ namespace Packet {
             return MetaP::TO_ListDispatch<
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 MetaP::TT_TVToTO<TV_BodySize>::type, 
-                BodyRegistry
+                BodyList
             >::f(type);
         }
 
@@ -81,7 +81,7 @@ namespace Packet {
             return MetaP::TO_ListDispatch<
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 MetaP::TT_TVToTO<TV_IsWireable>::type, 
-                BodyRegistry
+                BodyList
             >::f(type);
         }
 
@@ -89,7 +89,7 @@ namespace Packet {
             return MetaP::TO_ListDispatch<
                 MetaP::TT_TVIsEquals<TV_BodyType>::type, 
                 MetaP::TT_TVToTO<TV_IsDisconnect>::type, 
-                BodyRegistry
+                BodyList
             >::f(type);
         }
 
