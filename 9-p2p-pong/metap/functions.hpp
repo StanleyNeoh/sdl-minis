@@ -56,7 +56,6 @@ namespace MetaP {
     private:
         template<
             int I = 0,
-            template<typename> typename TO_FirstArgCast = TO_Identity,
             typename CT, 
             typename T, 
             typename... Ts
@@ -67,7 +66,7 @@ namespace MetaP {
                 using FirstArgType = std::decay_t<typename TT_FirstArg<FuncType>::type>;
                 if constexpr (std::is_same_v<std::decay_t<T>, FirstArgType>) {
                     return std::get<I>(std::forward<CT>(funcs))(
-                        TO_FirstArgCast<T>::f(std::forward<T>(arg)), 
+                        std::forward<T>(arg), 
                         std::forward<Ts>(args)...
                     );
                 } else {
@@ -90,8 +89,11 @@ namespace MetaP {
                 using FuncType = std::decay_t<std::tuple_element_t<I, std::decay_t<CT>>>;
                 using FirstArgType = std::decay_t<typename TT_FirstArg<FuncType>::type>;
                 if (TO_Pred<FirstArgType>::f(std::forward<T>(key))) {
-                    // Delegate to call() which will dispatch based on type
-                    _call<I, TO_FirstArgCast>(std::forward<CT>(funcs), std::forward<U>(arg), std::forward<Us>(args)...);
+                    _call<I>(
+                        std::forward<CT>(funcs), 
+                        TO_FirstArgCast<FirstArgType>::f(std::forward<U>(arg)), 
+                        std::forward<Us>(args)...
+                    );
                     return true;
                 }
                 return _dispatch<I+1, TO_Pred, TO_FirstArgCast>(std::forward<CT>(funcs), std::forward<T>(key), std::forward<U>(arg), std::forward<Us>(args)...);
