@@ -101,10 +101,6 @@ namespace MetaP {
             return false;
         }
     };
-
-    // Deduction guide for Callbacks
-    template <typename... Fs>
-    Callbacks(Fs&&...) -> Callbacks<Fs...>;
 }
 
 #endif
