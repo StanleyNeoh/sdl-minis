@@ -19,8 +19,9 @@ struct App {
     // AppState
     enum AppState {
         AppState_WindowClosed,
+        AppState_GameSelect,
         AppState_ReadyMenu,
-        AppState_Ongoing,
+        AppState_Pong,
     };
     AppState app_state = AppState_WindowClosed;
     bool is_master = false;
@@ -63,8 +64,8 @@ struct App {
             client_ready = false;
             messages.clear();
             winner = Winner_None;
-        } else if (_app_state == AppState_Ongoing) {
-            app_state = AppState_Ongoing;
+        } else if (_app_state == AppState_Pong) {
+            app_state = AppState_Pong;
         }
     }
     
@@ -74,17 +75,17 @@ struct App {
     }
     
     void process_sdl_events(const SDL_Event& event) {
-        if (app_state != AppState_Ongoing) return;
-        auto& paddle = is_master ? pong.botP : pong.topP;
+        if (app_state != AppState_Pong) return;
+        auto& paddle = is_master ? pong.rightP : pong.leftP;
         switch (event.type) {
             case SDL_KEYDOWN: {
                 auto key = event.key.keysym.sym;
                 switch (key) {
-                    case SDLK_a:
+                    case SDLK_w:
                         paddle.move(-20.0);
                         paddle_update = true;
                         break;
-                    case SDLK_d:
+                    case SDLK_s:
                         paddle.move(20.0);
                         paddle_update = true;
                         break;
@@ -96,8 +97,8 @@ struct App {
             case SDL_KEYUP: {
                 auto key = event.key.keysym.sym;
                 switch (key) {
-                    case SDLK_a:
-                    case SDLK_d:
+                    case SDLK_w:
+                    case SDLK_s:
                         paddle.move(0);
                         paddle_update = true;
                         break;
@@ -132,7 +133,7 @@ struct App {
             },
             [&](const Packet::PongConfigBody& pong_config) {
                 pong.unpack(pong_config);
-                reset_to_state(AppState_Ongoing);
+                reset_to_state(AppState_Pong);
             },
             [&](const Packet::PongReadyBody& pong_ready) {
                 if (is_master) {
@@ -142,7 +143,7 @@ struct App {
                 }
             },
             [&](const Packet::PongPaddleBody& pong_paddle) {
-                auto& paddle = is_master ? pong.topP : pong.botP;
+                auto& paddle = is_master ? pong.leftP : pong.rightP;
                 paddle.unpack(pong_paddle);
             },
             [&](const Packet::PongBallBody& pong_ball) {
@@ -162,7 +163,7 @@ struct App {
     void end_process() {
         if (app_state == AppState_WindowClosed) return;
         Uint64 now = SDL_GetTicks64();
-        if (app_state == AppState_Ongoing) {
+        if (app_state == AppState_Pong) {
             Logger logger("Pong");
             delta_ms = last_frame_ms == 0 
                 ? 0
@@ -170,11 +171,11 @@ struct App {
             last_frame_ms = now;
             Pong::State state = pong.step(delta_ms / 1000.0f);
             switch (state) {
-            case Pong::State_Top_Wins:
+            case Pong::State_Right_Wins:
                 winner = Winner_Client;
                 reset_to_state(AppState_ReadyMenu);
                 break;
-            case Pong::State_Bot_Wins:
+            case Pong::State_Left_Wins:
                 winner = Winner_Master;
                 reset_to_state(AppState_ReadyMenu);
                 break;
@@ -183,7 +184,7 @@ struct App {
             }
         }
         if (paddle_update) {
-            auto& paddle = is_master ? pong.botP : pong.topP;
+            auto& paddle = is_master ? pong.rightP : pong.leftP;
             manager.outgoingQueue.push(Packet::Packet::create(
                 paddle.pack()
             ));
@@ -197,167 +198,130 @@ struct App {
     }
 
     void draw_app() {
-        if (app_state != AppState_WindowClosed) {
-            bool isOpen = true;
-            if (ImGui::Begin("Game", &isOpen)) {
-                ImVec2 windowSize = ImGui::GetContentRegionAvail();
-                float leftPanelWidth = 200.0f; // Or windowSize.x * 0.3f for percentage
-                ImGui::BeginChild("LeftPanel", ImVec2(leftPanelWidth, 0), true);
+        if (app_state == AppState_WindowClosed) return;
+        bool isOpen = true;
+        if (ImGui::Begin("Game", &isOpen)) {
+            ImVec2 windowSize = ImGui::GetContentRegionAvail();
+            float rightPanelWidth = 200.0f; // Or windowSize.x * 0.3f for percentage
+            float leftPanelWidth = windowSize.x - 200.0f; // Or windowSize.x * 0.3f for percentage
+            ImGui::BeginChild("LeftPanel", ImVec2(leftPanelWidth, 0), true);
 
-                ImGui::Text("Role: %s", is_master ? "Master" : "Client");
-                ImGui::Text("Controls: A / D");
+            ImGui::Text("Role: %s", is_master ? "Master" : "Client");
+            ImGui::Text("Controls: W / S");
+            ImGui::Separator();
+
+            if (app_state == AppState_ReadyMenu) {
+                if (winner != Winner_None) {
+                    ImGui::Text("Winner is %s", winner == Winner_Master ? "Master" : "Client");
+                }
+                ImGui::Text("Ready Status:");
                 ImGui::Separator();
-
-                if (app_state == AppState_ReadyMenu) {
-                    if (winner != Winner_None) {
-                        ImGui::Text("Winner is %s", winner == Winner_Master ? "Master" : "Client");
-                    }
-                    ImGui::Text("Ready Status:");
-                    ImGui::Separator();
+                
+                // Table showing both players' ready status
+                if (ImGui::BeginTable("ReadyTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+                    ImGui::TableSetupColumn("Player");
+                    ImGui::TableSetupColumn("Ready");
+                    ImGui::TableHeadersRow();
                     
-                    // Table showing both players' ready status
-                    if (ImGui::BeginTable("ReadyTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-                        ImGui::TableSetupColumn("Player");
-                        ImGui::TableSetupColumn("Ready");
-                        ImGui::TableHeadersRow();
-                        
-                        // Master row
-                        ImGui::TableNextRow();
-                        ImGui::TableNextColumn();
-                        ImGui::Text("Master");
-                        ImGui::TableNextColumn();
-                        if (master_ready) {
-                            ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Ready");
-                        } else {
-                            ImGui::TextColored(ImVec4(0.8f, 0.4f, 0.4f, 1.0f), "Not Ready");
-                        }
-                        
-                        // Client row
-                        ImGui::TableNextRow();
-                        ImGui::TableNextColumn();
-                        ImGui::Text("Client");
-                        ImGui::TableNextColumn();
-                        if (client_ready) {
-                            ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Ready");
-                        } else {
-                            ImGui::TextColored(ImVec4(0.8f, 0.4f, 0.4f, 1.0f), "Not Ready");
-                        }
-                        
-                        ImGui::EndTable();
-                    }
-                    
-                    ImGui::Spacing();
-                    
-                    // Local ready checkbox
-                    bool my_ready_value = is_master ? master_ready : client_ready;
-                    if (ImGui::Checkbox("I'm Ready!", &my_ready_value)) {
-                        // Update local state
-                        if (is_master) {
-                            master_ready = my_ready_value;
-                        } else {
-                            client_ready = my_ready_value;
-                        }
-                        manager.outgoingQueue.try_push(Packet::Packet::create(
-                            Packet::PongReadyBody{
-                                .ready = my_ready_value
-                            }
-                        ));
-                    }
-                    
-                    // Start game when both ready
-                    if (master_ready && client_ready) {
-                        ImGui::Spacing();
-                        ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Both players ready!");
-                        
-                        // Only master can start the game
-                        if (is_master) {
-                            if (ImGui::Button("Start Game")) {
-                                // Reset and pack game state
-                                pong.reset();
-                                manager.outgoingQueue.try_push(Packet::Packet::create(
-                                    pong.pack()
-                                ));
-                                
-                                // Start game locally
-                                reset_to_state(AppState_Ongoing);
-                                last_frame_ms = SDL_GetTicks64();
-                            }
-                        } else {
-                            ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.4f, 1.0f), "Waiting for master to start...");
-                        }
-                    }
-
-                } else if (app_state == AppState_Ongoing) {
-                    ImVec2 avail = ImGui::GetContentRegionAvail();
-                    float canvasSide = std::max(200.0f, std::min(avail.x, avail.y));
-                    ImVec2 canvasSize(canvasSide, canvasSide);
-                    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
-                    ImGui::InvisibleButton("pong_canvas", canvasSize);
-
-                    ImDrawList* drawList = ImGui::GetWindowDrawList();
-                    const float padding = 12.0f;
-                    ImVec2 boardMin(canvasPos.x + padding, canvasPos.y + padding);
-                    ImVec2 boardMax(canvasPos.x + canvasSize.x - padding, canvasPos.y + canvasSize.y - padding);
-                    float boardWidth = boardMax.x - boardMin.x;
-                    float boardHeight = boardMax.y - boardMin.y;
-                    float scaleX = boardWidth / pong.width;
-                    float scaleY = boardHeight / pong.height;
-
-                    auto world_to_screen = [&](float x, float y) {
-                        return ImVec2(boardMin.x + x * scaleX, boardMin.y + y * scaleY);
-                    };
-
-                    drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(18, 18, 18, 255), 8.0f);
-                    drawList->AddRect(boardMin, boardMax, IM_COL32(220, 220, 220, 255), 4.0f, 0, 2.0f);
-
-                    ImVec2 centerTop = world_to_screen(pong.width * 0.5f, 0.0f);
-                    ImVec2 centerBottom = world_to_screen(pong.width * 0.5f, pong.height);
-                    drawList->AddLine(centerTop, centerBottom, IM_COL32(90, 90, 90, 255), 1.0f);
-
-                    auto draw_paddle = [&](const Pong::Paddle& paddle, ImU32 color) {
-                        ImVec2 paddleMin = world_to_screen(paddle.pos.x, paddle.pos.y - 0.35f);
-                        ImVec2 paddleMax = world_to_screen(paddle.pos.x + paddle.w, paddle.pos.y + 0.35f);
-                        drawList->AddRectFilled(paddleMin, paddleMax, color, 4.0f);
-                    };
-
-                    draw_paddle(pong.topP, IM_COL32(104, 211, 145, 255));
-                    draw_paddle(pong.botP, IM_COL32(95, 145, 255, 255));
-
-                    ImVec2 ballPos = world_to_screen(pong.ball.pos.x, pong.ball.pos.y);
-                    float ballRadius = std::max(4.0f, pong.ball.r * 0.5f * (scaleX + scaleY));
-                    drawList->AddCircleFilled(ballPos, ballRadius, IM_COL32(255, 244, 214, 255), 24);
-                }
-                ImGui::EndChild();
-
-                ImGui::SameLine();
-                ImGui::BeginChild("RightPanel", ImVec2(0, 0), true);
-
-                ImGui::SeparatorText("Chat");
-                if (ImGui::BeginChild("chat_messages", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders)) {
-                    for (const auto& message: messages) {
-                        ImGui::TextWrapped("%s", message.c_str());
-                    }
-                }
-                ImGui::EndChild();
-
-                bool sendChat = ImGui::InputText("##chat_input", chatInput, sizeof(chatInput), ImGuiInputTextFlags_EnterReturnsTrue);
-                ImGui::SameLine();
-                sendChat = ImGui::Button("Send") || sendChat;
-                if (sendChat && chatInput[0] != '\0') {
-                    if (manager.sendMessage(chatInput)) {
-                        messages.push_back(std::string("Me: ") + chatInput);
-                        chatInput[0] = '\0';
+                    // Master row
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::Text("Master");
+                    ImGui::TableNextColumn();
+                    if (master_ready) {
+                        ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Ready");
                     } else {
-                        messages.push_back("Failed to send: no active TCP connection");
+                        ImGui::TextColored(ImVec4(0.8f, 0.4f, 0.4f, 1.0f), "Not Ready");
+                    }
+                    
+                    // Client row
+                    ImGui::TableNextRow();
+                    ImGui::TableNextColumn();
+                    ImGui::Text("Client");
+                    ImGui::TableNextColumn();
+                    if (client_ready) {
+                        ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Ready");
+                    } else {
+                        ImGui::TextColored(ImVec4(0.8f, 0.4f, 0.4f, 1.0f), "Not Ready");
+                    }
+                    
+                    ImGui::EndTable();
+                }
+                
+                ImGui::Spacing();
+                
+                // Local ready checkbox
+                bool my_ready_value = is_master ? master_ready : client_ready;
+                if (ImGui::Checkbox("I'm Ready!", &my_ready_value)) {
+                    // Update local state
+                    if (is_master) {
+                        master_ready = my_ready_value;
+                    } else {
+                        client_ready = my_ready_value;
+                    }
+                    manager.outgoingQueue.try_push(Packet::Packet::create(
+                        Packet::PongReadyBody{
+                            .ready = my_ready_value
+                        }
+                    ));
+                }
+                
+                // Start game when both ready
+                if (master_ready && client_ready) {
+                    ImGui::Spacing();
+                    ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Both players ready!");
+                    
+                    // Only master can start the game
+                    if (is_master) {
+                        if (ImGui::Button("Start Game")) {
+                            // Reset and pack game state
+                            pong.reset();
+                            manager.outgoingQueue.try_push(Packet::Packet::create(
+                                pong.pack()
+                            ));
+                            
+                            // Start game locally
+                            reset_to_state(AppState_Pong);
+                            last_frame_ms = SDL_GetTicks64();
+                        }
+                    } else {
+                        ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.4f, 1.0f), "Waiting for master to start...");
                     }
                 }
-                ImGui::EndChild();
-            }
-            ImGui::End();
 
-            if (!isOpen) {
-                manager.disconnect();
+            } else if (app_state == AppState_Pong) {
+                pong.draw();
             }
+            ImGui::EndChild();
+
+            ImGui::SameLine();
+            ImGui::BeginChild("RightPanel", ImVec2(rightPanelWidth, 0), true);
+
+            ImGui::SeparatorText("Chat");
+            if (ImGui::BeginChild("chat_messages", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders)) {
+                for (const auto& message: messages) {
+                    ImGui::TextWrapped("%s", message.c_str());
+                }
+            }
+            ImGui::EndChild();
+
+            bool sendChat = ImGui::InputText("##chat_input", chatInput, sizeof(chatInput), ImGuiInputTextFlags_EnterReturnsTrue);
+            ImGui::SameLine();
+            sendChat = ImGui::Button("Send") || sendChat;
+            if (sendChat && chatInput[0] != '\0') {
+                if (manager.sendMessage(chatInput)) {
+                    messages.push_back(std::string("Me: ") + chatInput);
+                    chatInput[0] = '\0';
+                } else {
+                    messages.push_back("Failed to send: no active TCP connection");
+                }
+            }
+            ImGui::EndChild();
+        }
+        ImGui::End();
+
+        if (!isOpen) {
+            manager.disconnect();
         }
     }
 

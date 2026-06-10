@@ -5,45 +5,46 @@
 #include <iostream>
 #include "utils.hpp"
 #include "packet/packet.hpp"
+#include "imgui.h"
 
 struct Pong {
     enum State {
         State_Ongoing,
-        State_Top_Wins,
-        State_Bot_Wins,
+        State_Right_Wins,
+        State_Left_Wins,
     };
 
     struct Paddle {
         Vec2 pos;
-        float vx = 0;
-        float w;
+        float vy = 0;
+        float h;
 
-        Paddle(float x, float y, float w): pos(x, y), vx(0), w(w) {}
+        Paddle(float x, float y, float h): pos(x, y), vy(0), h(h) {}
 
-        void move(float vx) {
-            this->vx = vx;
+        void move(float vy) {
+            this->vy = vy;
         }
 
-        void reset(float x, float y, float w) {
+        void reset(float x, float y, float _h) {
             pos.x = x;
             pos.y = y;
-            w = w;
+            h = _h;
         }
 
         friend std::ostream& operator<<(std::ostream& o, const Paddle& paddle) {
-            o << "Paddle{pos=" << paddle.pos << ",w=" << paddle.w << "}";
+            o << "Paddle{pos=" << paddle.pos << ",h=" << paddle.h << "}";
             return o;
         }
 
         void unpack(const Packet::PongPaddleBody& padbody) {
-            pos.x = padbody.pos_x;
-            vx = padbody.vel_x;
+            pos.y = padbody.pos_y;
+            vy = padbody.vel_y;
         }
 
         Packet::PongPaddleBody pack() const {
             return Packet::PongPaddleBody{
-                .pos_x = pos.x,
-                .vel_x = vx
+                .pos_y = pos.y,
+                .vel_y = vy
             };
         }
     };
@@ -52,7 +53,7 @@ struct Pong {
         Vec2 pos;
         Vec2 vel;
         float r;
-        Ball(float x, float y, float r = 1.0, float v = 10.0): pos(x, y), vel(Vec2::rand_unit(v)), r(r) {}
+        Ball(float x, float y, float r = 1.0, float v = 10.0): pos(x, y), vel(Vec2::rand(v)), r(r) {}
 
         struct OverlapInfo {
             Vec2 normal;
@@ -68,24 +69,24 @@ struct Pong {
             return true;
         }
 
-        bool overlap_hsec(float x, float y, float l, OverlapInfo& info) const {
-            if (pos.x < x || pos.x > x + l || abs(pos.y - y) > r) return false;
-            info.normal = pos.y > y ? Vec2(0, 1) : Vec2(0, -1);
+        bool overlap_vsec(float x, float y, float l, OverlapInfo& info) const {
+            if (pos.y < y || pos.y > y + l || abs(pos.x - x) > r) return false;
+            info.normal = pos.x > x ? Vec2(1, 0) : Vec2(-1, 0);
             return true;
         }
 
         bool overlap_paddle(const Paddle& pad, OverlapInfo& info) const {
             return (
                 overlap_pt(pad.pos.x, pad.pos.y, info) 
-                || overlap_pt(pad.pos.x + pad.w, pad.pos.y, info)
-                || overlap_hsec(pad.pos.x, pad.pos.y, pad.w, info)
+                || overlap_pt(pad.pos.x, pad.pos.y + pad.h, info)
+                || overlap_vsec(pad.pos.x, pad.pos.y, pad.h, info)
             );
         }
 
         void reset(float x, float y, float v = 10.0) {
             pos.x = x;
             pos.y = y;
-            vel = Vec2::rand_unit(v);
+            vel = Vec2::rand(v);
         }
 
         void reset(float x, float y, float vx, float vy) {
@@ -121,54 +122,54 @@ struct Pong {
 
     float width;
     float height;
-    float pad_w;
+    float pad_h;
     float pad_m;
     Ball ball;
-    Paddle topP;
-    Paddle botP;
+    Paddle leftP;
+    Paddle rightP;
 
-    Pong(float width = 30.0, float height = 30.0, float ball_r = 1.0, float pad_w = 3.0, float pad_m = 1.0): 
+    Pong(float width = 30.0, float height = 30.0, float ball_r = 1.0, float pad_h = 3.0, float pad_m = 1.0): 
         width(width), 
         height(height),
-        pad_w(pad_w),
+        pad_h(pad_h),
         pad_m(pad_m),
         ball(width / 2, height / 2, ball_r),
-        topP(width / 2 - pad_w / 2, pad_m, pad_w),
-        botP(width / 2 - pad_w / 2, height - pad_m, pad_w)
+        leftP(pad_m, height / 2 - pad_h / 2, pad_h),
+        rightP(width - pad_m, height / 2 - pad_h / 2, pad_h)
     {}
 
     void reset() {
         ball.reset(width / 2, height / 2);
-        topP.reset(width / 2 - pad_w / 2, pad_m, pad_w);
-        botP.reset(width / 2 - pad_w / 2, height - pad_m, pad_w);
+        leftP.reset(pad_m, height / 2 - pad_h / 2, pad_h),
+        rightP.reset(width - pad_m, height / 2 - pad_h / 2, pad_h);
     }
 
     State step(float dt) {
         ball.pos.x = ball.pos.x + ball.vel.x * dt;
         ball.pos.y = ball.pos.y + ball.vel.y * dt;
-        topP.pos.x = SDL_clamp(topP.pos.x + topP.vx * dt, 0, width - topP.w);
-        botP.pos.x = SDL_clamp(botP.pos.x + botP.vx * dt, 0, width - botP.w);
-        if (ball.pos.x - ball.r < 0) {
-            ball.pos.x = ball.r;
-            if (ball.vel.x < 0) ball.vel.x = -ball.vel.x;
-        }
+        leftP.pos.y = SDL_clamp(leftP.pos.y + leftP.vy * dt, 0, width - leftP.h);
+        rightP.pos.y = SDL_clamp(rightP.pos.y + rightP.vy * dt, 0, width - rightP.h);
         if (ball.pos.y - ball.r < 0) {
-            return State_Bot_Wins;
+            ball.pos.y = ball.r;
+            if (ball.vel.y < 0) ball.vel.y = -ball.vel.y;
         }
-        if (ball.pos.x + ball.r > width) {
-            ball.pos.x = width - ball.r;
-            if (ball.vel.x > 0) ball.vel.x = -ball.vel.x;
+        if (ball.pos.x - ball.r < 0) {
+            return State_Left_Wins;
         }
         if (ball.pos.y + ball.r > height) {
-            return State_Top_Wins;
+            ball.pos.y = height - ball.r;
+            if (ball.vel.y > 0) ball.vel.y = -ball.vel.y;
+        }
+        if (ball.pos.x + ball.r > width) {
+            return State_Right_Wins;
         }
         Ball::OverlapInfo info;
-        if (ball.overlap_paddle(topP, info) && info.normal.dot(ball.vel) < 0) {
+        if (ball.overlap_paddle(leftP, info) && info.normal.dot(ball.vel) < 0) {
             float scale = ball.vel.x * info.normal.x + ball.vel.y * info.normal.y;
             ball.vel.x -= info.normal.x * 2 * scale;
             ball.vel.y -= info.normal.y * 2 * scale;
         }
-        if (ball.overlap_paddle(botP, info) && info.normal.dot(ball.vel) < 0) {
+        if (ball.overlap_paddle(rightP, info) && info.normal.dot(ball.vel) < 0) {
             float scale = ball.vel.x * info.normal.x + ball.vel.y * info.normal.y;
             ball.vel.x -= info.normal.x * 2 * scale;
             ball.vel.y -= info.normal.y * 2 * scale;
@@ -178,8 +179,8 @@ struct Pong {
 
     friend std::ostream& operator<<(std::ostream& o, const Pong& pong) {
         o << "Pong{\n" 
-            << "  Top" << pong.topP << "\n"
-            << "  Bot" << pong.botP << "\n"
+            << "  Left" << pong.leftP << "\n"
+            << "  Right" << pong.rightP << "\n"
             << "  " << pong.ball << "\n"
             << "}";
         return o;
@@ -188,7 +189,7 @@ struct Pong {
     void unpack(const Packet::PongConfigBody& config) {
         width = config.width;
         height = config.height;
-        pad_w = config.pad_w;
+        pad_h = config.pad_h;
         pad_m = config.pad_m;
         ball.reset(
             config.ball_pos_x, 
@@ -197,15 +198,15 @@ struct Pong {
             config.ball_vel_y
         );
         ball.r = config.ball_r;
-        topP.reset(
+        leftP.reset(
             config.top_pos_x,
             config.top_pos_y,
-            pad_w
+            pad_h
         );
-        botP.reset(
+        rightP.reset(
             config.bot_pos_x,
             config.bot_pos_y,
-            pad_w
+            pad_h
         );
     }
 
@@ -213,22 +214,58 @@ struct Pong {
         return Packet::PongConfigBody{
             .width = width,
             .height = height,
-            .pad_w = pad_w,
+            .pad_h = pad_h,
             .pad_m = pad_m,
             .ball_pos_x = ball.pos.x,
             .ball_pos_y = ball.pos.y,
             .ball_vel_x = ball.vel.x,
             .ball_vel_y = ball.vel.y,
             .ball_r = ball.r,
-            .top_pos_x = topP.pos.x,
-            .top_pos_y = topP.pos.y,
-            .top_w = topP.w,
-            .bot_pos_x = botP.pos.x,
-            .bot_pos_y = botP.pos.y,
-            .bot_w = botP.w
+            .top_pos_x = leftP.pos.x,
+            .top_pos_y = leftP.pos.y,
+            .top_w = leftP.h,
+            .bot_pos_x = rightP.pos.x,
+            .bot_pos_y = rightP.pos.y,
+            .bot_w = rightP.h
         };
     }
 
+    void draw() {
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+        float canvasSide = std::min(avail.x, avail.y);
+
+        ImVec2 canvasSize(canvasSide, canvasSide);
+        ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+        ImVec2 margin((avail.x - canvasSide) / 2, (avail.y - canvasSide) / 2);
+        ImVec2 boardMin(canvasPos.x, canvasPos.y);
+        ImVec2 boardMax(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y);
+        float scaleX = (boardMax.x - boardMin.x) / width;
+        float scaleY = (boardMax.y - boardMin.y) / height;
+        auto world_to_screen = [&](float x, float y) {
+            return ImVec2(boardMin.x + x * scaleX, boardMin.y + y * scaleY);
+        };
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        auto draw_paddle = [&](const Pong::Paddle& paddle, ImU32 color) {
+            float depth = 0.7f;
+            ImVec2 paddleMin = world_to_screen(paddle.pos.x - depth / 2, paddle.pos.y);
+            ImVec2 paddleMax = world_to_screen(paddle.pos.x + depth / 2, paddle.pos.y + paddle.h);
+            drawList->AddRectFilled(paddleMin, paddleMax, color, 4.0f);
+        };
+
+        ImGui::InvisibleButton("pong_canvas", canvasSize);
+        drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(18, 18, 18, 255), 8.0f);
+        drawList->AddRect(boardMin, boardMax, IM_COL32(220, 220, 220, 255), 4.0f, 0, 2.0f);
+        ImVec2 centerTop = world_to_screen(width * 0.5f, 0.0f);
+        ImVec2 centerBottom = world_to_screen(width * 0.5f, height);
+        drawList->AddLine(centerTop, centerBottom, IM_COL32(90, 90, 90, 255), 1.0f);
+
+        draw_paddle(leftP, IM_COL32(104, 211, 145, 255));
+        draw_paddle(rightP, IM_COL32(95, 145, 255, 255));
+
+        ImVec2 ballPos = world_to_screen(ball.pos.x, ball.pos.y);
+        float ballRadius = std::max(4.0f, ball.r * 0.5f * (scaleX + scaleY));
+        drawList->AddCircleFilled(ballPos, ballRadius, IM_COL32(255, 244, 214, 255), 24);
+    }
 };
 
 #endif

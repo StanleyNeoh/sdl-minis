@@ -9,7 +9,7 @@ namespace Packet {
     struct PongConfigBody {
         float width;
         float height;
-        float pad_w;
+        float pad_h;
         float pad_m;
         float ball_pos_x;
         float ball_pos_y;
@@ -32,7 +32,7 @@ namespace Packet {
             };
             mmemcpy(ptr, width);
             mmemcpy(ptr, height);
-            mmemcpy(ptr, pad_w);
+            mmemcpy(ptr, pad_h);
             mmemcpy(ptr, pad_m);
             mmemcpy(ptr, ball_pos_x);
             mmemcpy(ptr, ball_pos_y);
@@ -58,7 +58,7 @@ namespace Packet {
             };
             mmemcpy(ptr, width);
             mmemcpy(ptr, height);
-            mmemcpy(ptr, pad_w);
+            mmemcpy(ptr, pad_h);
             mmemcpy(ptr, pad_m);
             mmemcpy(ptr, ball_pos_x);
             mmemcpy(ptr, ball_pos_y);

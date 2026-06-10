@@ -7,8 +7,8 @@
 
 namespace Packet {
     struct PongPaddleBody {
-        float pos_x;
-        float vel_x;
+        float pos_y;
+        float vel_y;
 
         bool serialize(char* buf) const {
             char* ptr = buf;
@@ -17,8 +17,8 @@ namespace Packet {
                 memcpy(ptr, &y, sizeof(y));
                 ptr += sizeof(x);
             };
-            mmemcpy(ptr, pos_x);
-            mmemcpy(ptr, vel_x);
+            mmemcpy(ptr, pos_y);
+            mmemcpy(ptr, vel_y);
             return true;
         }
 
@@ -30,8 +30,8 @@ namespace Packet {
                 x = decode_f32(y);
                 ptr += sizeof(x);
             };
-            mmemcpy(ptr, pos_x);
-            mmemcpy(ptr, vel_x);
+            mmemcpy(ptr, pos_y);
+            mmemcpy(ptr, vel_y);
             return true;
         }
     };
