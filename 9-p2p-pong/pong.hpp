@@ -14,6 +14,45 @@ struct Pong {
         State_Left_Wins,
     };
 
+    struct Projection {
+        Vec2 pos{};
+        Vec2 vel{};
+        float r = 1.0;
+        float life = -1.0;
+
+        void reset() {
+            life = -1.0;
+        }
+
+        void reset(float pos_x, float pos_y, float vel_x, float vel_y, float _life) {
+            pos.x = pos_x;
+            pos.y = pos_y;
+            vel.x = vel_x;
+            vel.y = vel_y;
+            life = _life;
+        }
+
+        void unpack(const Packet::PongProjBody& proj_body)  {
+            reset(
+                proj_body.proj_pos_x,
+                proj_body.proj_pos_y,
+                proj_body.proj_vel_x,
+                proj_body.proj_vel_y,
+                proj_body.proj_life
+            );
+        }
+
+        Packet::PongProjBody pack() const {
+            return Packet::PongProjBody{
+                .proj_pos_x = pos.x,
+                .proj_pos_y = pos.y,
+                .proj_vel_x = vel.x,
+                .proj_vel_y = vel.y,
+                .proj_life = life
+            };
+        }
+    };
+
     struct Paddle {
         Vec2 pos;
         float vy = 0;
@@ -64,8 +103,12 @@ struct Pong {
             float dy = pos.y - y;
             float d2 = dx * dx + dy * dy;
             if (d2 > r * r) return false;
-            info.normal = Vec2(dx, dy);
-            info.normal.normalise();
+            if (d2 == 0.0f) {
+                info.normal = Vec2(1.0f, 0.0f);
+            } else {
+                info.normal = Vec2(dx, dy);
+                info.normal.normalise();
+            }
             return true;
         }
 
@@ -81,6 +124,23 @@ struct Pong {
                 || overlap_pt(pad.pos.x, pad.pos.y + pad.h, info)
                 || overlap_vsec(pad.pos.x, pad.pos.y, pad.h, info)
             );
+        }
+
+        bool overlap_proj(const Projection& proj, OverlapInfo& info) const {
+            if (proj.life < 0) return false;
+            float dx = pos.x - proj.pos.x;
+            float dy = pos.y - proj.pos.y;
+            float d2 = dx * dx + dy * dy;
+            float maxd = proj.r + r;
+            if (d2 > maxd * maxd) return false;
+            if (d2 == 0.0f) {
+                info.normal = Vec2(1.0f, 0.0f);
+            } else {
+                info.normal.x = dx;
+                info.normal.y = dy;
+                info.normal.normalise();
+            }
+            return true;
         }
 
         void reset(float x, float y, float v = 10.0) {
@@ -127,6 +187,8 @@ struct Pong {
     Ball ball;
     Paddle leftP;
     Paddle rightP;
+    Projection leftProj;
+    Projection rightProj;
 
     Pong(float width = 30.0, float height = 30.0, float ball_r = 1.0, float pad_h = 3.0, float pad_m = 1.0): 
         width(width), 
@@ -142,13 +204,25 @@ struct Pong {
         ball.reset(width / 2, height / 2);
         leftP.reset(pad_m, height / 2 - pad_h / 2, pad_h),
         rightP.reset(width - pad_m, height / 2 - pad_h / 2, pad_h);
+        leftProj.reset();
+        rightProj.reset();
     }
 
-    State step(float dt) {
+        State step(float dt) {
         ball.pos.x = ball.pos.x + ball.vel.x * dt;
         ball.pos.y = ball.pos.y + ball.vel.y * dt;
-        leftP.pos.y = SDL_clamp(leftP.pos.y + leftP.vy * dt, 0, width - leftP.h);
-        rightP.pos.y = SDL_clamp(rightP.pos.y + rightP.vy * dt, 0, width - rightP.h);
+          leftP.pos.y = SDL_clamp(leftP.pos.y + leftP.vy * dt, 0, height - leftP.h);
+          rightP.pos.y = SDL_clamp(rightP.pos.y + rightP.vy * dt, 0, height - rightP.h);
+        if (leftProj.life >= 0) {
+            leftProj.pos.x += leftProj.vel.x * dt;
+            leftProj.pos.y += leftProj.vel.y * dt;
+            leftProj.life -= dt;
+        }
+        if (rightProj.life >= 0) {
+            rightProj.pos.x += rightProj.vel.x * dt;
+            rightProj.pos.y += rightProj.vel.y * dt;
+            rightProj.life -= dt;
+        }
         if (ball.pos.y - ball.r < 0) {
             ball.pos.y = ball.r;
             if (ball.vel.y < 0) ball.vel.y = -ball.vel.y;
@@ -165,15 +239,55 @@ struct Pong {
         }
         Ball::OverlapInfo info;
         if (ball.overlap_paddle(leftP, info) && info.normal.dot(ball.vel) < 0) {
-            float scale = ball.vel.x * info.normal.x + ball.vel.y * info.normal.y;
+            float scale = ball.vel.dot(info.normal);
             ball.vel.x -= info.normal.x * 2 * scale;
             ball.vel.y -= info.normal.y * 2 * scale;
         }
         if (ball.overlap_paddle(rightP, info) && info.normal.dot(ball.vel) < 0) {
-            float scale = ball.vel.x * info.normal.x + ball.vel.y * info.normal.y;
+            float scale = ball.vel.dot(info.normal);
             ball.vel.x -= info.normal.x * 2 * scale;
             ball.vel.y -= info.normal.y * 2 * scale;
         }
+        auto resolve_proj_collision = [&](Projection& proj) {
+            // u1 + u2 = v1 + v2
+            // u1^2 + u2^2 = v1^2 + v2^2
+            // u1^2 - v1^2 = v2^2 - u2^2
+            // (u1 + v1)(u1 - v1) = (v2 - u2)(v2 + u2)
+            // u1 + v1 = v2 + u2
+            // u1 - u2 = v2 - v1
+            // u1 = v2
+            // u2 = v1
+            // u1 + (u2 - u1) = v1
+            // u2 - (u2 - u1) = v2
+
+            if (!ball.overlap_proj(proj, info)) return;
+
+            Vec2 rel_vel(ball.vel.x - proj.vel.x, ball.vel.y - proj.vel.y);
+            float rel_normal_speed = rel_vel.dot(info.normal);
+            if (rel_normal_speed >= 0.0f) return;
+
+            // Equal-mass, perfectly elastic impulse along the contact normal.
+            ball.vel.x -= info.normal.x * rel_normal_speed;
+            ball.vel.y -= info.normal.y * rel_normal_speed;
+            proj.vel.x += info.normal.x * rel_normal_speed;
+            proj.vel.y += info.normal.y * rel_normal_speed;
+
+            // Separate overlapping bodies to avoid repeated collisions in following frames.
+            float dx = ball.pos.x - proj.pos.x;
+            float dy = ball.pos.y - proj.pos.y;
+            float dist = std::sqrt(dx * dx + dy * dy);
+            float min_dist = ball.r + proj.r;
+            if (dist < min_dist) {
+                float correction = 0.5f * (min_dist - dist + 0.001f);
+                ball.pos.x += info.normal.x * correction;
+                ball.pos.y += info.normal.y * correction;
+                proj.pos.x -= info.normal.x * correction;
+                proj.pos.y -= info.normal.y * correction;
+            }
+        };
+
+        resolve_proj_collision(leftProj);
+        resolve_proj_collision(rightProj);
         return State_Ongoing;
     }
 
@@ -199,13 +313,13 @@ struct Pong {
         );
         ball.r = config.ball_r;
         leftP.reset(
-            config.top_pos_x,
-            config.top_pos_y,
+            config.left_pos_x,
+            config.left_pos_y,
             pad_h
         );
         rightP.reset(
-            config.bot_pos_x,
-            config.bot_pos_y,
+            config.right_pos_x,
+            config.right_pos_y,
             pad_h
         );
     }
@@ -221,12 +335,12 @@ struct Pong {
             .ball_vel_x = ball.vel.x,
             .ball_vel_y = ball.vel.y,
             .ball_r = ball.r,
-            .top_pos_x = leftP.pos.x,
-            .top_pos_y = leftP.pos.y,
-            .top_w = leftP.h,
-            .bot_pos_x = rightP.pos.x,
-            .bot_pos_y = rightP.pos.y,
-            .bot_w = rightP.h
+            .left_pos_x = leftP.pos.x,
+            .left_pos_y = leftP.pos.y,
+            .left_w = leftP.h,
+            .right_pos_x = rightP.pos.x,
+            .right_pos_y = rightP.pos.y,
+            .right_w = rightP.h
         };
     }
 
@@ -251,6 +365,12 @@ struct Pong {
             ImVec2 paddleMax = world_to_screen(paddle.pos.x + depth / 2, paddle.pos.y + paddle.h);
             drawList->AddRectFilled(paddleMin, paddleMax, color, 4.0f);
         };
+        auto draw_proj = [&](const Pong::Projection& proj, ImU32 color) {
+            if (proj.life < 0) return;
+            ImVec2 projPos = world_to_screen(proj.pos.x, proj.pos.y);
+            float projRad = std::max(4.0f, ball.r * 0.5f * (scaleX + scaleY));
+            drawList->AddCircleFilled(projPos, projRad, color, 24.0f);
+        };
 
         ImGui::InvisibleButton("pong_canvas", canvasSize);
         drawList->AddRectFilled(canvasPos, ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(18, 18, 18, 255), 8.0f);
@@ -261,6 +381,8 @@ struct Pong {
 
         draw_paddle(leftP, IM_COL32(104, 211, 145, 255));
         draw_paddle(rightP, IM_COL32(95, 145, 255, 255));
+        draw_proj(leftProj, IM_COL32(104, 211, 145, 125));
+        draw_proj(rightProj, IM_COL32(95, 145, 255, 125));
 
         ImVec2 ballPos = world_to_screen(ball.pos.x, ball.pos.y);
         float ballRadius = std::max(4.0f, ball.r * 0.5f * (scaleX + scaleY));

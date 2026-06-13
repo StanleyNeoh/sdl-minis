@@ -18,6 +18,7 @@
 #include "body/game_vote.hpp"
 #include "body/pong_config.hpp"
 #include "body/pong_paddle.hpp"
+#include "body/pong_proj.hpp"
 #include "body/pong_ball.hpp"
 
 namespace Packet {
@@ -32,6 +33,7 @@ namespace Packet {
         GameVoteBody,
         PongConfigBody,
         PongPaddleBody,
+        PongProjBody,
         PongBallBody
     >;
 

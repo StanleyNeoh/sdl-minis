@@ -16,12 +16,12 @@ namespace Packet {
         float ball_vel_x;
         float ball_vel_y;
         float ball_r;
-        float top_pos_x;
-        float top_pos_y;
-        float top_w;
-        float bot_pos_x;
-        float bot_pos_y;
-        float bot_w;
+        float left_pos_x;
+        float left_pos_y;
+        float left_w;
+        float right_pos_x;
+        float right_pos_y;
+        float right_w;
 
         bool serialize(char* buf) const {
             char* ptr = buf;
@@ -39,12 +39,12 @@ namespace Packet {
             mmemcpy(ptr, ball_vel_x);
             mmemcpy(ptr, ball_vel_y);
             mmemcpy(ptr, ball_r);
-            mmemcpy(ptr, top_pos_x);
-            mmemcpy(ptr, top_pos_y);
-            mmemcpy(ptr, top_w);
-            mmemcpy(ptr, bot_pos_x);
-            mmemcpy(ptr, bot_pos_y);
-            mmemcpy(ptr, bot_w);
+            mmemcpy(ptr, left_pos_x);
+            mmemcpy(ptr, left_pos_y);
+            mmemcpy(ptr, left_w);
+            mmemcpy(ptr, right_pos_x);
+            mmemcpy(ptr, right_pos_y);
+            mmemcpy(ptr, right_w);
             return true;
         }
 
@@ -65,12 +65,12 @@ namespace Packet {
             mmemcpy(ptr, ball_vel_x);
             mmemcpy(ptr, ball_vel_y);
             mmemcpy(ptr, ball_r);
-            mmemcpy(ptr, top_pos_x);
-            mmemcpy(ptr, top_pos_y);
-            mmemcpy(ptr, top_w);
-            mmemcpy(ptr, bot_pos_x);
-            mmemcpy(ptr, bot_pos_y);
-            mmemcpy(ptr, bot_w);
+            mmemcpy(ptr, left_pos_x);
+            mmemcpy(ptr, left_pos_y);
+            mmemcpy(ptr, left_w);
+            mmemcpy(ptr, right_pos_x);
+            mmemcpy(ptr, right_pos_y);
+            mmemcpy(ptr, right_w);
             return true;
         }
     };

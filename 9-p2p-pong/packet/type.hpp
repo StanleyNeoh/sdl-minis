@@ -15,6 +15,7 @@ namespace Packet {
         GameVoteType,
         PongConfigType,
         PongPaddleType,
+        PongProjType,
         PongBallType,
     };
 }

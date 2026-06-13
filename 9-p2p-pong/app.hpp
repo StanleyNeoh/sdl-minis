@@ -65,8 +65,8 @@ struct App {
     int64_t vote_confirm_countdown = -1;
 
     // Pong State
-    Timer ball_timer;
     bool paddle_update = false;
+    bool proj_update = false;
     Pong pong;
 
     App(std::string_view name, u_int16_t gamePort):
@@ -91,11 +91,13 @@ struct App {
         if (app_state == AppState_WindowClosed) return;
         frame_stopwatch.step();
         paddle_update = false;
+        proj_update = false;
     }
     
     void process_sdl_events(const SDL_Event& event) {
         if (app_state == AppState_Pong) {
             auto& paddle = is_master ? pong.rightP : pong.leftP;
+            auto& proj = is_master ? pong.rightProj : pong.leftProj;
             switch (event.type) {
                 case SDL_KEYDOWN: {
                     auto key = event.key.keysym.sym;
@@ -108,6 +110,16 @@ struct App {
                             paddle.move(20.0);
                             paddle_update = true;
                             break;
+                        case SDLK_SPACE: {
+                            if (proj.life < 0) {
+                                proj.pos.x = paddle.pos.x;
+                                proj.pos.y = paddle.pos.y + paddle.h / 2;
+                                proj.life = 0.5;
+                                proj.vel.x = is_master ? -20.0 : 20.0;
+                                proj.vel.y = 0;
+                                proj_update = true;
+                            }
+                        }
                         default:
                             break;
                     }
@@ -164,6 +176,10 @@ struct App {
                 auto& paddle = is_master ? pong.leftP : pong.rightP;
                 paddle.unpack(pong_paddle);
             },
+            [&](const Packet::PongProjBody& pong_proj) {
+                auto& proj = is_master ? pong.leftProj : pong.rightProj; 
+                proj.unpack(pong_proj);
+            },
             [&](const Packet::PongBallBody& pong_ball) {
                 pong.ball.unpack(pong_ball);
             }
@@ -202,7 +218,13 @@ struct App {
                     paddle.pack()
                 ));
             }
-            if (is_master && ball_timer.has_elapsed(100)) {
+            if (proj_update) {
+                auto& proj = is_master ? pong.rightProj : pong.leftProj;
+                manager.outgoingQueue.push(Packet::Packet::create(
+                    proj.pack()
+                ));
+            }
+            if (is_master) {
                 manager.outgoingQueue.push(Packet::Packet::create(
                     pong.ball.pack()
                 ));
@@ -210,8 +232,7 @@ struct App {
         } else if (app_state == AppState_GameSelect) {
             if (client_vote == master_vote && master_vote != Game::Uninitialized) {
                 if (vote_confirm_countdown < 0) {
-                    std::cout << "SET VOTE\n";
-                    vote_confirm_countdown = 10000;
+                    vote_confirm_countdown = 5000;
                 } else if (vote_confirm_countdown > 0) {
                     vote_confirm_countdown -= frame_stopwatch.delta();
                     if (vote_confirm_countdown <= 0) vote_confirm_countdown = 0;
