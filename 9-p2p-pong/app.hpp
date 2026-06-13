@@ -11,6 +11,35 @@
 #include "pong.hpp"
 #include "imgui.h"
 
+struct Timer {
+    Uint64 last_time = 0;
+
+    bool has_elapsed(Uint64 interval_ms) {
+        Uint64 now = SDL_GetTicks64();
+        if(now - last_time <= interval_ms) return false;
+        last_time = now;
+        return true;
+    }
+};
+
+struct Stopwatch {
+    Uint64 last_time = 0;
+    Uint64 now = 0;
+    void step() {
+
+        last_time = now;
+        now = SDL_GetTicks64();
+    }
+
+    Uint64 delta() {
+        if (last_time == 0) {
+            return 0;
+        } else {
+            return now - last_time;
+        }
+    }
+};
+
 struct App {
     Discover discover;
     TcpManager manager;
@@ -20,28 +49,23 @@ struct App {
     enum AppState {
         AppState_WindowClosed,
         AppState_GameSelect,
-        AppState_ReadyMenu,
         AppState_Pong,
     };
     AppState app_state = AppState_WindowClosed;
     bool is_master = false;
+    Stopwatch frame_stopwatch;
 
     // Chat State
     std::vector<std::string> messages;
     char chatInput[128] = {0};
 
+    // Game Select
+    Game::Type client_vote = Game::Uninitialized;
+    Game::Type master_vote = Game::Uninitialized;
+    int64_t vote_confirm_countdown = -1;
+
     // Pong State
-    enum Winner {
-        Winner_None,
-        Winner_Master,
-        Winner_Client,
-    };
-    Winner winner = Winner_None;
-    Uint64 last_frame_ms = 0;
-    Uint64 last_ball_update_ms = 0;
-    Uint64 delta_ms = 0;
-    bool master_ready = false;
-    bool client_ready = false;
+    Timer ball_timer;
     bool paddle_update = false;
     Pong pong;
 
@@ -50,20 +74,14 @@ struct App {
         manager(TcpManager::Config(gamePort)) {}
     
     void reset_to_state(AppState _app_state) {
-        if (_app_state == AppState_ReadyMenu) {
-            app_state = AppState_ReadyMenu;
-            last_frame_ms = 0;
-            delta_ms = 0;
-            master_ready = false;
-            client_ready = false;
-        } else if (_app_state == AppState_WindowClosed) {
+        if (_app_state == AppState_WindowClosed) {
             app_state = AppState_WindowClosed;
-            last_frame_ms = 0;
-            delta_ms = 0;
-            master_ready = false;
-            client_ready = false;
             messages.clear();
-            winner = Winner_None;
+        } else if (_app_state == AppState_GameSelect) {
+            app_state = AppState_GameSelect;
+            vote_confirm_countdown = -1;
+            master_vote = Game::Uninitialized;
+            client_vote = Game::Uninitialized;
         } else if (_app_state == AppState_Pong) {
             app_state = AppState_Pong;
         }
@@ -71,44 +89,46 @@ struct App {
     
     void begin_process() {
         if (app_state == AppState_WindowClosed) return;
+        frame_stopwatch.step();
         paddle_update = false;
     }
     
     void process_sdl_events(const SDL_Event& event) {
-        if (app_state != AppState_Pong) return;
-        auto& paddle = is_master ? pong.rightP : pong.leftP;
-        switch (event.type) {
-            case SDL_KEYDOWN: {
-                auto key = event.key.keysym.sym;
-                switch (key) {
-                    case SDLK_w:
-                        paddle.move(-20.0);
-                        paddle_update = true;
-                        break;
-                    case SDLK_s:
-                        paddle.move(20.0);
-                        paddle_update = true;
-                        break;
-                    default:
-                        break;
+        if (app_state == AppState_Pong) {
+            auto& paddle = is_master ? pong.rightP : pong.leftP;
+            switch (event.type) {
+                case SDL_KEYDOWN: {
+                    auto key = event.key.keysym.sym;
+                    switch (key) {
+                        case SDLK_w:
+                            paddle.move(-20.0);
+                            paddle_update = true;
+                            break;
+                        case SDLK_s:
+                            paddle.move(20.0);
+                            paddle_update = true;
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
                 }
-                break;
-            }
-            case SDL_KEYUP: {
-                auto key = event.key.keysym.sym;
-                switch (key) {
-                    case SDLK_w:
-                    case SDLK_s:
-                        paddle.move(0);
-                        paddle_update = true;
-                        break;
-                    default:
-                        break;
+                case SDL_KEYUP: {
+                    auto key = event.key.keysym.sym;
+                    switch (key) {
+                        case SDLK_w:
+                        case SDLK_s:
+                            paddle.move(0);
+                            paddle_update = true;
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
                 }
-                break;
+                default:
+                    break;
             }
-            default:
-                break;
         }
     }
     
@@ -119,9 +139,7 @@ struct App {
         static MetaP::Callbacks callbacks(
             [&](const Packet::ConnectResponseBody& connect_response) {
                 is_master = connect_response.is_master;
-                app_state = AppState_ReadyMenu;
-                winner = Winner_Master;
-                reset_to_state(AppState_ReadyMenu);
+                reset_to_state(AppState_GameSelect);
                 logger.log("Connected to ", connect_response.addr, " as ", is_master ? "Master": "Client");
             },
             [&](const Packet::DisconnectResponseBody& disconnect_response) {
@@ -131,16 +149,16 @@ struct App {
             [&](const Packet::MessageBody& message) {
                 messages.push_back(std::string("Peer: ") + message.message);
             },
+            [&](const Packet::GameVoteBody& game_vote) {
+                if (is_master) {
+                    client_vote = game_vote.type;
+                } else {
+                    master_vote = game_vote.type;
+                }
+            },
             [&](const Packet::PongConfigBody& pong_config) {
                 pong.unpack(pong_config);
                 reset_to_state(AppState_Pong);
-            },
-            [&](const Packet::PongReadyBody& pong_ready) {
-                if (is_master) {
-                    client_ready = pong_ready.ready;
-                } else {
-                    master_ready = pong_ready.ready;
-                }
             },
             [&](const Packet::PongPaddleBody& pong_paddle) {
                 auto& paddle = is_master ? pong.leftP : pong.rightP;
@@ -165,35 +183,54 @@ struct App {
         Uint64 now = SDL_GetTicks64();
         if (app_state == AppState_Pong) {
             Logger logger("Pong");
-            delta_ms = last_frame_ms == 0 
-                ? 0
-                : now - last_frame_ms;
-            last_frame_ms = now;
-            Pong::State state = pong.step(delta_ms / 1000.0f);
+            Pong::State state = pong.step(frame_stopwatch.delta() / 1000.0f);
             switch (state) {
             case Pong::State_Right_Wins:
-                winner = Winner_Client;
-                reset_to_state(AppState_ReadyMenu);
+                messages.push_back("Client won!");
+                reset_to_state(AppState_GameSelect);
                 break;
             case Pong::State_Left_Wins:
-                winner = Winner_Master;
-                reset_to_state(AppState_ReadyMenu);
+                messages.push_back("Master won!");
+                reset_to_state(AppState_GameSelect);
                 break;
             default:
                 break;
             }
-        }
-        if (paddle_update) {
-            auto& paddle = is_master ? pong.rightP : pong.leftP;
-            manager.outgoingQueue.push(Packet::Packet::create(
-                paddle.pack()
-            ));
-        }
-        if (is_master && now - last_ball_update_ms > 100) {
-            last_ball_update_ms = now;
-            manager.outgoingQueue.push(Packet::Packet::create(
-                pong.ball.pack()
-            ));
+            if (paddle_update) {
+                auto& paddle = is_master ? pong.rightP : pong.leftP;
+                manager.outgoingQueue.push(Packet::Packet::create(
+                    paddle.pack()
+                ));
+            }
+            if (is_master && ball_timer.has_elapsed(100)) {
+                manager.outgoingQueue.push(Packet::Packet::create(
+                    pong.ball.pack()
+                ));
+            }
+        } else if (app_state == AppState_GameSelect) {
+            if (client_vote == master_vote && master_vote != Game::Uninitialized) {
+                if (vote_confirm_countdown < 0) {
+                    std::cout << "SET VOTE\n";
+                    vote_confirm_countdown = 10000;
+                } else if (vote_confirm_countdown > 0) {
+                    vote_confirm_countdown -= frame_stopwatch.delta();
+                    if (vote_confirm_countdown <= 0) vote_confirm_countdown = 0;
+
+                    if (is_master && vote_confirm_countdown == 0) {
+                        switch (master_vote) {
+                        case Game::Pong: {
+                            pong.reset();
+                            manager.outgoingQueue.try_push(Packet::Packet::create(
+                                pong.pack()
+                            ));
+                            reset_to_state(AppState_Pong);
+                            break;
+                        }}
+                    }
+                }
+            } else {
+                vote_confirm_countdown = -1;
+            }
         }
     }
 
@@ -206,89 +243,59 @@ struct App {
             float leftPanelWidth = windowSize.x - 200.0f; // Or windowSize.x * 0.3f for percentage
             ImGui::BeginChild("LeftPanel", ImVec2(leftPanelWidth, 0), true);
 
-            ImGui::Text("Role: %s", is_master ? "Master" : "Client");
-            ImGui::Text("Controls: W / S");
-            ImGui::Separator();
-
-            if (app_state == AppState_ReadyMenu) {
-                if (winner != Winner_None) {
-                    ImGui::Text("Winner is %s", winner == Winner_Master ? "Master" : "Client");
-                }
-                ImGui::Text("Ready Status:");
+            if (app_state == AppState_GameSelect) {
+                auto _checkbox = [&](bool master_checkbox, Game::Type game_type,int id) {
+                    ImGui::PushID(id);
+                    ImGui::BeginDisabled(is_master != master_checkbox);
+                    bool checked = master_checkbox ? master_vote : client_vote;
+                    if (ImGui::Checkbox("Vote", &checked)) {
+                        if (checked) {
+                            if (is_master) {
+                                master_vote = game_type;
+                            } else {
+                                client_vote = game_type;
+                            }
+                            manager.outgoingQueue.push(Packet::Packet::create(
+                                Packet::GameVoteBody {
+                                    .type = game_type
+                                }
+                            ));
+                        } else {
+                            if (is_master) {
+                                master_vote = Game::Uninitialized;
+                            } else {
+                                client_vote = Game::Uninitialized;
+                            }
+                            manager.outgoingQueue.push(Packet::Packet::create(
+                                Packet::GameVoteBody {
+                                    .type = Game::Uninitialized
+                                }
+                            ));
+                        }
+                    }
+                    ImGui::EndDisabled();
+                    ImGui::PopID();
+                };
+                ImGui::Text("Role: %s", is_master ? "Master" : "Client");
                 ImGui::Separator();
-                
-                // Table showing both players' ready status
-                if (ImGui::BeginTable("ReadyTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-                    ImGui::TableSetupColumn("Player");
-                    ImGui::TableSetupColumn("Ready");
+                if (ImGui::BeginTable("GameSelectTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+                    ImGui::TableSetupColumn("Game");
+                    ImGui::TableSetupColumn("Master Vote");
+                    ImGui::TableSetupColumn("Client Vote");
                     ImGui::TableHeadersRow();
-                    
-                    // Master row
+
                     ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-                    ImGui::Text("Master");
-                    ImGui::TableNextColumn();
-                    if (master_ready) {
-                        ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Ready");
-                    } else {
-                        ImGui::TextColored(ImVec4(0.8f, 0.4f, 0.4f, 1.0f), "Not Ready");
-                    }
-                    
-                    // Client row
-                    ImGui::TableNextRow();
-                    ImGui::TableNextColumn();
-                    ImGui::Text("Client");
-                    ImGui::TableNextColumn();
-                    if (client_ready) {
-                        ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Ready");
-                    } else {
-                        ImGui::TextColored(ImVec4(0.8f, 0.4f, 0.4f, 1.0f), "Not Ready");
-                    }
-                    
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("Pong");
+                    ImGui::TableSetColumnIndex(1);
+                    _checkbox(true, Game::Pong, 0);
+                    ImGui::TableSetColumnIndex(2);
+                    _checkbox(false, Game::Pong, 1);
                     ImGui::EndTable();
                 }
-                
-                ImGui::Spacing();
-                
-                // Local ready checkbox
-                bool my_ready_value = is_master ? master_ready : client_ready;
-                if (ImGui::Checkbox("I'm Ready!", &my_ready_value)) {
-                    // Update local state
-                    if (is_master) {
-                        master_ready = my_ready_value;
-                    } else {
-                        client_ready = my_ready_value;
-                    }
-                    manager.outgoingQueue.try_push(Packet::Packet::create(
-                        Packet::PongReadyBody{
-                            .ready = my_ready_value
-                        }
-                    ));
+                if (vote_confirm_countdown >= 0) {
+                    ImGui::Text("Game starting in %f", vote_confirm_countdown / 1000.0f);
                 }
-                
-                // Start game when both ready
-                if (master_ready && client_ready) {
-                    ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Both players ready!");
-                    
-                    // Only master can start the game
-                    if (is_master) {
-                        if (ImGui::Button("Start Game")) {
-                            // Reset and pack game state
-                            pong.reset();
-                            manager.outgoingQueue.try_push(Packet::Packet::create(
-                                pong.pack()
-                            ));
-                            
-                            // Start game locally
-                            reset_to_state(AppState_Pong);
-                            last_frame_ms = SDL_GetTicks64();
-                        }
-                    } else {
-                        ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.4f, 1.0f), "Waiting for master to start...");
-                    }
-                }
-
             } else if (app_state == AppState_Pong) {
                 pong.draw();
             }

@@ -12,7 +12,7 @@ namespace Packet {
         DisconnectResponseType,
         KillRequestType,
         MessageType,
-        PongReadyType,
+        GameVoteType,
         PongConfigType,
         PongPaddleType,
         PongBallType,

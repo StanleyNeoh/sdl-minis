@@ -15,8 +15,8 @@
 #include "body/disconnect_response.hpp"
 #include "body/kill_request.hpp"
 #include "body/message.hpp"
+#include "body/game_vote.hpp"
 #include "body/pong_config.hpp"
-#include "body/pong_ready.hpp"
 #include "body/pong_paddle.hpp"
 #include "body/pong_ball.hpp"
 
@@ -29,8 +29,8 @@ namespace Packet {
         DisconnectResponseBody,
         KillRequestBody,
         MessageBody,
+        GameVoteBody,
         PongConfigBody,
-        PongReadyBody,
         PongPaddleBody,
         PongBallBody
     >;
