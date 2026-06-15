@@ -9,6 +9,7 @@
 #include "p2pTcp.hpp"
 #include "utils.hpp"
 #include "pong.hpp"
+#include "shooter.hpp"
 #include "imgui.h"
 
 struct Timer {
@@ -50,6 +51,7 @@ struct App {
         AppState_WindowClosed,
         AppState_GameSelect,
         AppState_Pong,
+        AppState_Shooter
     };
     AppState app_state = AppState_WindowClosed;
     bool is_master = false;
@@ -69,9 +71,16 @@ struct App {
     bool proj_update = false;
     Pong pong;
 
+    // Shooter State
+    Shooter shooter;
+
     App(std::string_view name, u_int16_t gamePort):
         discover(Discover::Config(name, gamePort)),
         manager(TcpManager::Config(gamePort)) {}
+    
+    void load_renderer(SDL_Renderer* renderer) {
+        shooter.initialize_texture(renderer);
+    }
     
     void reset_to_state(AppState _app_state) {
         if (_app_state == AppState_WindowClosed) {
@@ -84,6 +93,8 @@ struct App {
             client_vote = Game::Uninitialized;
         } else if (_app_state == AppState_Pong) {
             app_state = AppState_Pong;
+        } else if (_app_state == AppState_Shooter) {
+            app_state = AppState_Shooter;
         }
     }
     
@@ -246,7 +257,12 @@ struct App {
                             ));
                             reset_to_state(AppState_Pong);
                             break;
-                        }}
+                        }
+                        case Game::Shooter:
+                            std::cout << "Set to shooter\n";
+                            reset_to_state(AppState_Shooter);
+                            break;
+                        }
                     }
                 }
             } else {
@@ -265,10 +281,10 @@ struct App {
             ImGui::BeginChild("LeftPanel", ImVec2(leftPanelWidth, 0), true);
 
             if (app_state == AppState_GameSelect) {
-                auto _checkbox = [&](bool master_checkbox, Game::Type game_type,int id) {
-                    ImGui::PushID(id);
+                auto _checkbox = [&](bool master_checkbox, Game::Type game_type, int& id) {
+                    ImGui::PushID(++id);
                     ImGui::BeginDisabled(is_master != master_checkbox);
-                    bool checked = master_checkbox ? master_vote : client_vote;
+                    bool checked = (master_checkbox ? master_vote : client_vote) == game_type;
                     if (ImGui::Checkbox("Vote", &checked)) {
                         if (checked) {
                             if (is_master) {
@@ -309,9 +325,19 @@ struct App {
                     ImGui::TableSetColumnIndex(0);
                     ImGui::Text("Pong");
                     ImGui::TableSetColumnIndex(1);
-                    _checkbox(true, Game::Pong, 0);
+                    int id = 0;
+                    _checkbox(true, Game::Pong, id);
                     ImGui::TableSetColumnIndex(2);
-                    _checkbox(false, Game::Pong, 1);
+                    _checkbox(false, Game::Pong, id);
+
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("Shooter");
+                    ImGui::TableSetColumnIndex(1);
+                    _checkbox(true, Game::Shooter, id);
+                    ImGui::TableSetColumnIndex(2);
+                    _checkbox(false, Game::Shooter, id);
+
                     ImGui::EndTable();
                 }
                 if (vote_confirm_countdown >= 0) {
@@ -319,6 +345,8 @@ struct App {
                 }
             } else if (app_state == AppState_Pong) {
                 pong.draw();
+            } else if (app_state == AppState_Shooter) {
+                shooter.draw();
             }
             ImGui::EndChild();
 

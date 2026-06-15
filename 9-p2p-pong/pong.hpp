@@ -92,7 +92,7 @@ struct Pong {
         Vec2 pos;
         Vec2 vel;
         float r;
-        Ball(float x, float y, float r = 1.0, float v = 10.0): pos(x, y), vel(Vec2::rand(v)), r(r) {}
+        Ball(float x, float y, float r = 1.0, float v = 10.0): pos(x, y), vel(Rand::vec2_real(v)), r(r) {}
 
         struct OverlapInfo {
             Vec2 normal;
@@ -146,7 +146,7 @@ struct Pong {
         void reset(float x, float y, float v = 10.0) {
             pos.x = x;
             pos.y = y;
-            vel = Vec2::rand(v);
+            vel = Rand::vec2_real(v);
         }
 
         void reset(float x, float y, float vx, float vy) {

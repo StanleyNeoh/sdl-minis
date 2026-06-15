@@ -9,6 +9,7 @@ namespace Game {
     enum Type: uint32_t {
         Uninitialized,
         Pong,
+        Shooter
     };
 }
 

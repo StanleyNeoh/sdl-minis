@@ -88,6 +88,8 @@ int main(int argc, char** args)
     ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer2_Init(renderer);
 
+    app.load_renderer(renderer);
+
     // Main loop
     bool done = false;
     while (!done)
