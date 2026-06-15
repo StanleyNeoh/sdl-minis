@@ -164,10 +164,11 @@ struct TcpManager {
     }
 
     void sendConnectResponse(const sockaddr_in& addr, bool is_master) {
+        RoleState role_state = is_master ? RoleState_Master : RoleState_Client;
         return incomingQueue.push(Packet::Packet::create(
             Packet::ConnectResponseBody{
                 .addr = addr,
-                .is_master = is_master
+                .role_state = role_state
             }
         ));
     }

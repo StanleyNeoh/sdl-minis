@@ -54,7 +54,7 @@ struct App {
         AppState_Shooter
     };
     AppState app_state = AppState_WindowClosed;
-    bool is_master = false;
+    RoleState role_state = RoleState_Uninitialised;
     Stopwatch frame_stopwatch;
 
     // Chat State
@@ -85,6 +85,7 @@ struct App {
     void reset_to_state(AppState _app_state) {
         if (_app_state == AppState_WindowClosed) {
             app_state = AppState_WindowClosed;
+            role_state = RoleState_SinglePlayer;
             messages.clear();
         } else if (_app_state == AppState_GameSelect) {
             app_state = AppState_GameSelect;
@@ -107,8 +108,21 @@ struct App {
     
     void process_sdl_events(const SDL_Event& event) {
         if (app_state == AppState_Pong) {
+            bool is_master = role_state == RoleState_Master;
             auto& paddle = is_master ? pong.rightP : pong.leftP;
+            auto& other_paddle = !is_master ? pong.rightP : pong.leftP;
             auto& proj = is_master ? pong.rightProj : pong.leftProj;
+            auto& other_proj = !is_master ? pong.rightProj : pong.leftProj;
+            auto shoot_projectile = [&](Pong::Projection& proj, const Pong::Paddle& paddle, bool to_left) {
+                if (proj.life < 0) {
+                    proj.pos.x = paddle.pos.x;
+                    proj.pos.y = paddle.pos.y + paddle.h / 2;
+                    proj.life = 0.5;
+                    proj.vel.x = to_left ? -20.0 : 20.0;
+                    proj.vel.y = 0;
+                    proj_update = true;
+                }
+            };
             switch (event.type) {
                 case SDL_KEYDOWN: {
                     auto key = event.key.keysym.sym;
@@ -121,16 +135,20 @@ struct App {
                             paddle.move(20.0);
                             paddle_update = true;
                             break;
-                        case SDLK_SPACE: {
-                            if (proj.life < 0) {
-                                proj.pos.x = paddle.pos.x;
-                                proj.pos.y = paddle.pos.y + paddle.h / 2;
-                                proj.life = 0.5;
-                                proj.vel.x = is_master ? -20.0 : 20.0;
-                                proj.vel.y = 0;
-                                proj_update = true;
-                            }
-                        }
+                        case SDLK_UP:
+                            other_paddle.move(-20.0);
+                            paddle_update = true;
+                            break;
+                        case SDLK_DOWN:
+                            other_paddle.move(20.0);
+                            paddle_update = true;
+                            break;
+                        case SDLK_SPACE:
+                            shoot_projectile(proj, paddle, is_master);
+                            break;
+                        case SDLK_RSHIFT:
+                            shoot_projectile(other_proj, other_paddle, !is_master);
+                            break;
                         default:
                             break;
                     }
@@ -142,6 +160,11 @@ struct App {
                         case SDLK_w:
                         case SDLK_s:
                             paddle.move(0);
+                            paddle_update = true;
+                            break;
+                        case SDLK_UP:
+                        case SDLK_DOWN:
+                            other_paddle.move(0);
                             paddle_update = true;
                             break;
                         default:
@@ -161,9 +184,9 @@ struct App {
 
         static MetaP::Callbacks callbacks(
             [&](const Packet::ConnectResponseBody& connect_response) {
-                is_master = connect_response.is_master;
+                role_state = connect_response.role_state;
                 reset_to_state(AppState_GameSelect);
-                logger.log("Connected to ", connect_response.addr, " as ", is_master ? "Master": "Client");
+                logger.log("Connected to ", connect_response.addr, " as ", role_state);
             },
             [&](const Packet::DisconnectResponseBody& disconnect_response) {
                 logger.log("Disconnected from ", disconnect_response.addr);
@@ -173,7 +196,7 @@ struct App {
                 messages.push_back(std::string("Peer: ") + message.message);
             },
             [&](const Packet::GameVoteBody& game_vote) {
-                if (is_master) {
+                if (role_state == RoleState_Master) {
                     client_vote = game_vote.type;
                 } else {
                     master_vote = game_vote.type;
@@ -184,11 +207,11 @@ struct App {
                 reset_to_state(AppState_Pong);
             },
             [&](const Packet::PongPaddleBody& pong_paddle) {
-                auto& paddle = is_master ? pong.leftP : pong.rightP;
+                auto& paddle = role_state == RoleState_Master ? pong.leftP : pong.rightP;
                 paddle.unpack(pong_paddle);
             },
             [&](const Packet::PongProjBody& pong_proj) {
-                auto& proj = is_master ? pong.leftProj : pong.rightProj; 
+                auto& proj = role_state == RoleState_Master ? pong.leftProj : pong.rightProj; 
                 proj.unpack(pong_proj);
             },
             [&](const Packet::PongBallBody& pong_ball) {
@@ -208,6 +231,7 @@ struct App {
     void end_process() {
         if (app_state == AppState_WindowClosed) return;
         Uint64 now = SDL_GetTicks64();
+        bool is_master = role_state == RoleState_Master;
         if (app_state == AppState_Pong) {
             Logger logger("Pong");
             Pong::State state = pong.step(frame_stopwatch.delta() / 1000.0f);
@@ -223,22 +247,24 @@ struct App {
             default:
                 break;
             }
-            if (paddle_update) {
-                auto& paddle = is_master ? pong.rightP : pong.leftP;
-                manager.outgoingQueue.push(Packet::Packet::create(
-                    paddle.pack()
-                ));
-            }
-            if (proj_update) {
-                auto& proj = is_master ? pong.rightProj : pong.leftProj;
-                manager.outgoingQueue.push(Packet::Packet::create(
-                    proj.pack()
-                ));
-            }
-            if (is_master) {
-                manager.outgoingQueue.push(Packet::Packet::create(
-                    pong.ball.pack()
-                ));
+            if (role_state != RoleState_SinglePlayer) {
+                if (paddle_update) {
+                    auto& paddle = is_master ? pong.rightP : pong.leftP;
+                    manager.outgoingQueue.push(Packet::Packet::create(
+                        paddle.pack()
+                    ));
+                }
+                if (proj_update) {
+                    auto& proj = is_master ? pong.rightProj : pong.leftProj;
+                    manager.outgoingQueue.push(Packet::Packet::create(
+                        proj.pack()
+                    ));
+                }
+                if (is_master) {
+                    manager.outgoingQueue.push(Packet::Packet::create(
+                        pong.ball.pack()
+                    ));
+                }
             }
         } else if (app_state == AppState_GameSelect) {
             if (client_vote == master_vote && master_vote != Game::Uninitialized) {
@@ -248,7 +274,10 @@ struct App {
                     vote_confirm_countdown -= frame_stopwatch.delta();
                     if (vote_confirm_countdown <= 0) vote_confirm_countdown = 0;
 
-                    if (is_master && vote_confirm_countdown == 0) {
+                    if (
+                        (is_master || role_state == RoleState_SinglePlayer)
+                        && vote_confirm_countdown == 0
+                    ) {
                         switch (master_vote) {
                         case Game::Pong: {
                             pong.reset();
@@ -282,38 +311,48 @@ struct App {
 
             if (app_state == AppState_GameSelect) {
                 auto _checkbox = [&](bool master_checkbox, Game::Type game_type, int& id) {
+                    bool is_singleplayer = role_state == RoleState_SinglePlayer;
+                    bool is_master = role_state == RoleState_Master;
                     ImGui::PushID(++id);
-                    ImGui::BeginDisabled(is_master != master_checkbox);
+                    ImGui::BeginDisabled(!is_singleplayer && is_master != master_checkbox);
                     bool checked = (master_checkbox ? master_vote : client_vote) == game_type;
                     if (ImGui::Checkbox("Vote", &checked)) {
                         if (checked) {
-                            if (is_master) {
+                            if (master_checkbox) {
                                 master_vote = game_type;
                             } else {
                                 client_vote = game_type;
                             }
-                            manager.outgoingQueue.push(Packet::Packet::create(
-                                Packet::GameVoteBody {
-                                    .type = game_type
-                                }
-                            ));
+                            if (!is_singleplayer) {
+                                manager.outgoingQueue.push(Packet::Packet::create(
+                                    Packet::GameVoteBody {
+                                        .type = game_type
+                                    }
+                                ));
+                            }
                         } else {
-                            if (is_master) {
+                            if (master_checkbox) {
                                 master_vote = Game::Uninitialized;
                             } else {
                                 client_vote = Game::Uninitialized;
                             }
-                            manager.outgoingQueue.push(Packet::Packet::create(
-                                Packet::GameVoteBody {
-                                    .type = Game::Uninitialized
-                                }
-                            ));
+                            if (!is_singleplayer) {
+                                manager.outgoingQueue.push(Packet::Packet::create(
+                                    Packet::GameVoteBody {
+                                        .type = Game::Uninitialized
+                                    }
+                                ));
+                            }
                         }
                     }
                     ImGui::EndDisabled();
                     ImGui::PopID();
                 };
-                ImGui::Text("Role: %s", is_master ? "Master" : "Client");
+                {
+                    std::stringstream ss;
+                    ss << role_state;
+                    ImGui::Text("Role: %s", ss.str().c_str());
+                }
                 ImGui::Separator();
                 if (ImGui::BeginTable("GameSelectTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
                     ImGui::TableSetupColumn("Game");
@@ -378,6 +417,7 @@ struct App {
 
         if (!isOpen) {
             manager.disconnect();
+            reset_to_state(AppState_WindowClosed);
         }
     }
 
@@ -416,9 +456,14 @@ struct App {
                     ImGui::TableSetColumnIndex(2);
                     float cellWidth = ImGui::GetContentRegionAvail().x;
                     ImGui::PushID(address.data());
-                    ImGui::BeginDisabled(isHost || neigh.state != Discover::Loc::Available);
+                    ImGui::BeginDisabled(neigh.state != Discover::Loc::Available);
                     if (ImGui::Button("Chat", ImVec2{cellWidth, 20.0f})) {
-                        manager.connect(neigh.address);
+                        if (isHost) {
+                            role_state = RoleState_SinglePlayer;
+                            reset_to_state(AppState_GameSelect);
+                        } else {
+                            manager.connect(neigh.address);
+                        }
                     }
                     ImGui::EndDisabled();
                     ImGui::PopID();
