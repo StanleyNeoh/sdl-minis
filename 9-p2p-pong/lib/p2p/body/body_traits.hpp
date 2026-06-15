@@ -1,12 +1,12 @@
-#ifndef PACKET_BODY_BODY_TRAITS_HPP
-#define PACKET_BODY_BODY_TRAITS_HPP
+#ifndef P2P_BODY_BODY_TRAITS_HPP
+#define P2P_BODY_BODY_TRAITS_HPP
 
 #include "../type.hpp"
 #include <stddef.h>
 #include <cstdint>
 #include <type_traits>
 
-namespace Packet {
+namespace P2P {
     template<typename _Body>
     struct TV_BodySize {
         static constexpr size_t value = 0;

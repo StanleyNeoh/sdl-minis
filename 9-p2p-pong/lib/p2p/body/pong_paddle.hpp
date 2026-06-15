@@ -1,11 +1,11 @@
-#ifndef PACKET_BODY_PONG_PADDLE_HPP
-#define PACKET_BODY_PONG_PADDLE_HPP
+#ifndef P2P_BODY_PONG_PADDLE_HPP
+#define P2P_BODY_PONG_PADDLE_HPP
 
 #include "body_traits.hpp"
 #include "../type.hpp"
-#include "../../platform_socket.hpp"
+#include "common/platform_socket.hpp"
 
-namespace Packet {
+namespace P2P {
     struct PongPaddleBody {
         float pos_y;
         float vel_y;

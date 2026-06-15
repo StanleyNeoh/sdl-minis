@@ -1,5 +1,5 @@
-#ifndef PIPE_HPP
-#define PIPE_HPP
+#ifndef COMMON_PIPE_HPP
+#define COMMON_PIPE_HPP
 
 #include <array>
 #include <atomic>

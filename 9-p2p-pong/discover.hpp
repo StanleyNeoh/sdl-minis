@@ -5,10 +5,10 @@
 #include <iostream>
 #include <thread>
 #include <unordered_map>
-#include "platform_socket.hpp"
-#include "logger.hpp"
-#include "utils.hpp"
-#include "pipe.hpp"
+#include "common/platform_socket.hpp"
+#include "common/logger.hpp"
+#include "common/utils.hpp"
+#include "common/pipe.hpp"
 
 struct Discover {
     constexpr static size_t MAX_NEIGH = 1024;

@@ -1,9 +1,9 @@
-#ifndef PACKET_BODY_GAME_VOTE_HPP
-#define PACKET_BODY_GAME_VOTE_HPP
+#ifndef P2P_BODY_GAME_VOTE_HPP
+#define P2P_BODY_GAME_VOTE_HPP
 
 #include "body_traits.hpp"
 #include "../type.hpp"
-#include "../../platform_socket.hpp"
+#include "common/platform_socket.hpp"
 
 namespace Game {
     enum Type: uint32_t {
@@ -13,7 +13,7 @@ namespace Game {
     };
 }
 
-namespace Packet {
+namespace P2P {
     struct GameVoteBody {
         Game::Type type;
 

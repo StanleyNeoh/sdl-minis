@@ -1,5 +1,5 @@
-#ifndef LOGGER_HPP
-#define LOGGER_HPP
+#ifndef COMMON_LOGGER_HPP
+#define COMMON_LOGGER_HPP
 
 #include <iostream>
 #include <string_view>

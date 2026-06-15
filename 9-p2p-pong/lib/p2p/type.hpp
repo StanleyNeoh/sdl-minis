@@ -1,9 +1,9 @@
-#ifndef PACKET_TYPE_HPP
-#define PACKET_TYPE_HPP
+#ifndef P2P_TYPE_HPP
+#define P2P_TYPE_HPP
 
 #include <cstdint>
 
-namespace Packet {
+namespace P2P {
     enum Type: uint32_t {
         UninitializedType,
         ConnectRequestType,

@@ -6,8 +6,8 @@
 #include <shared_mutex>
 #include <string>
 #include "discover.hpp"
-#include "p2pTcp.hpp"
-#include "utils.hpp"
+#include "p2p/tcp_manager.hpp"
+#include "common/utils.hpp"
 #include "pong.hpp"
 #include "shooter.hpp"
 #include "imgui.h"
@@ -27,7 +27,6 @@ struct Stopwatch {
     Uint64 last_time = 0;
     Uint64 now = 0;
     void step() {
-
         last_time = now;
         now = SDL_GetTicks64();
     }
@@ -43,8 +42,7 @@ struct Stopwatch {
 
 struct App {
     Discover discover;
-    TcpManager manager;
-
+    P2P::TcpManager tcp_manager;
 
     // AppState
     enum AppState {
@@ -76,7 +74,7 @@ struct App {
 
     App(std::string_view name, u_int16_t gamePort):
         discover(Discover::Config(name, gamePort)),
-        manager(TcpManager::Config(gamePort)) {}
+        tcp_manager(P2P::TcpManager::Config(gamePort)) {}
     
     void load_renderer(SDL_Renderer* renderer) {
         shooter.initialize_texture(renderer);
@@ -183,46 +181,46 @@ struct App {
         discover.process_events();
 
         static MetaP::Callbacks callbacks(
-            [&](const Packet::ConnectResponseBody& connect_response) {
+            [&](const P2P::ConnectResponseBody& connect_response) {
                 role_state = connect_response.role_state;
                 reset_to_state(AppState_GameSelect);
                 logger.log("Connected to ", connect_response.addr, " as ", role_state);
             },
-            [&](const Packet::DisconnectResponseBody& disconnect_response) {
+            [&](const P2P::DisconnectResponseBody& disconnect_response) {
                 logger.log("Disconnected from ", disconnect_response.addr);
                 reset_to_state(AppState_WindowClosed);
             },
-            [&](const Packet::MessageBody& message) {
+            [&](const P2P::MessageBody& message) {
                 messages.push_back(std::string("Peer: ") + message.message);
             },
-            [&](const Packet::GameVoteBody& game_vote) {
+            [&](const P2P::GameVoteBody& game_vote) {
                 if (role_state == RoleState_Master) {
                     client_vote = game_vote.type;
                 } else {
                     master_vote = game_vote.type;
                 }
             },
-            [&](const Packet::PongConfigBody& pong_config) {
+            [&](const P2P::PongConfigBody& pong_config) {
                 pong.unpack(pong_config);
                 reset_to_state(AppState_Pong);
             },
-            [&](const Packet::PongPaddleBody& pong_paddle) {
+            [&](const P2P::PongPaddleBody& pong_paddle) {
                 auto& paddle = role_state == RoleState_Master ? pong.leftP : pong.rightP;
                 paddle.unpack(pong_paddle);
             },
-            [&](const Packet::PongProjBody& pong_proj) {
+            [&](const P2P::PongProjBody& pong_proj) {
                 auto& proj = role_state == RoleState_Master ? pong.leftProj : pong.rightProj; 
                 proj.unpack(pong_proj);
             },
-            [&](const Packet::PongBallBody& pong_ball) {
+            [&](const P2P::PongBallBody& pong_ball) {
                 pong.ball.unpack(pong_ball);
             }
         );
 
-        Packet::Packet packet;
-        while (manager.incomingQueue.try_pop(packet)) {
+        P2P::Packet packet;
+        while (tcp_manager.incomingQueue.try_pop(packet)) {
             callbacks.dispatch<
-                MetaP::TT_TVIsEquals<Packet::TV_BodyType>::type,
+                MetaP::TT_TVIsEquals<P2P::TV_BodyType>::type,
                 MetaP::TO_VariantCast
             >(packet.type, packet.body);
         }
@@ -250,18 +248,18 @@ struct App {
             if (role_state != RoleState_SinglePlayer) {
                 if (paddle_update) {
                     auto& paddle = is_master ? pong.rightP : pong.leftP;
-                    manager.outgoingQueue.push(Packet::Packet::create(
+                    tcp_manager.outgoingQueue.push(P2P::Packet::create(
                         paddle.pack()
                     ));
                 }
                 if (proj_update) {
                     auto& proj = is_master ? pong.rightProj : pong.leftProj;
-                    manager.outgoingQueue.push(Packet::Packet::create(
+                    tcp_manager.outgoingQueue.push(P2P::Packet::create(
                         proj.pack()
                     ));
                 }
                 if (is_master) {
-                    manager.outgoingQueue.push(Packet::Packet::create(
+                    tcp_manager.outgoingQueue.push(P2P::Packet::create(
                         pong.ball.pack()
                     ));
                 }
@@ -281,7 +279,7 @@ struct App {
                         switch (master_vote) {
                         case Game::Pong: {
                             pong.reset();
-                            manager.outgoingQueue.try_push(Packet::Packet::create(
+                            tcp_manager.outgoingQueue.try_push(P2P::Packet::create(
                                 pong.pack()
                             ));
                             reset_to_state(AppState_Pong);
@@ -324,8 +322,8 @@ struct App {
                                 client_vote = game_type;
                             }
                             if (!is_singleplayer) {
-                                manager.outgoingQueue.push(Packet::Packet::create(
-                                    Packet::GameVoteBody {
+                                tcp_manager.outgoingQueue.push(P2P::Packet::create(
+                                    P2P::GameVoteBody {
                                         .type = game_type
                                     }
                                 ));
@@ -337,8 +335,8 @@ struct App {
                                 client_vote = Game::Uninitialized;
                             }
                             if (!is_singleplayer) {
-                                manager.outgoingQueue.push(Packet::Packet::create(
-                                    Packet::GameVoteBody {
+                                tcp_manager.outgoingQueue.push(P2P::Packet::create(
+                                    P2P::GameVoteBody {
                                         .type = Game::Uninitialized
                                     }
                                 ));
@@ -404,7 +402,7 @@ struct App {
             ImGui::SameLine();
             sendChat = ImGui::Button("Send") || sendChat;
             if (sendChat && chatInput[0] != '\0') {
-                if (manager.sendMessage(chatInput)) {
+                if (tcp_manager.sendMessage(chatInput)) {
                     messages.push_back(std::string("Me: ") + chatInput);
                     chatInput[0] = '\0';
                 } else {
@@ -416,7 +414,7 @@ struct App {
         ImGui::End();
 
         if (!isOpen) {
-            manager.disconnect();
+            tcp_manager.disconnect();
             reset_to_state(AppState_WindowClosed);
         }
     }
@@ -462,7 +460,7 @@ struct App {
                             role_state = RoleState_SinglePlayer;
                             reset_to_state(AppState_GameSelect);
                         } else {
-                            manager.connect(neigh.address);
+                            tcp_manager.connect(neigh.address);
                         }
                     }
                     ImGui::EndDisabled();

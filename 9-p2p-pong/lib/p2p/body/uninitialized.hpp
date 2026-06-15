@@ -1,11 +1,11 @@
-#ifndef PACKET_BODY_UNINITIALIZED_HPP
-#define PACKET_BODY_UNINITIALIZED_HPP
+#ifndef P2P_BODY_UNINITIALIZED_HPP
+#define P2P_BODY_UNINITIALIZED_HPP
 
 #include "body_traits.hpp"
 #include "../type.hpp"
-#include "../../platform_socket.hpp"
+#include "common/platform_socket.hpp"
 
-namespace Packet {
+namespace P2P {
     struct UninitializedBody {};
 
     template <>

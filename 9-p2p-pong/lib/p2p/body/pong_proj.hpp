@@ -1,11 +1,11 @@
-#ifndef PACKET_BODY_PONG_PROJ_HPP
-#define PACKET_BODY_PONG_PROJ_HPP
+#ifndef P2P_BODY_PONG_PROJ_HPP
+#define P2P_BODY_PONG_PROJ_HPP
 
 #include "body_traits.hpp"
 #include "../type.hpp"
-#include "../../platform_socket.hpp"
+#include "common/platform_socket.hpp"
 
-namespace Packet {
+namespace P2P {
     struct PongProjBody {
         float proj_pos_x;
         float proj_pos_y;

@@ -1,9 +1,9 @@
-#ifndef PACKET_READER_HPP
-#define PACKET_READER_HPP
+#ifndef P2P_READER_HPP
+#define P2P_READER_HPP
 
 #include "packet.hpp"
 
-namespace Packet {
+namespace P2P {
     struct Reader {
         enum Status {
             Closed,

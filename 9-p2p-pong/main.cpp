@@ -15,10 +15,9 @@
 #include <cstring>
 #include <atomic>
 #include <shared_mutex>
-#include "platform_socket.hpp"
+#include "common/platform_socket.hpp"
+#include "common/logger.hpp"
 #include "discover.hpp"
-#include "p2pTcp.hpp"
-#include "logger.hpp"
 #include "app.hpp"
 
 // Main code

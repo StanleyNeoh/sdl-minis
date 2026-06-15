@@ -1,9 +1,9 @@
-#ifndef PACKET_BODY_CONNECT_RESPONSE_HPP
-#define PACKET_BODY_CONNECT_RESPONSE_HPP
+#ifndef P2P_BODY_CONNECT_RESPONSE_HPP
+#define P2P_BODY_CONNECT_RESPONSE_HPP
 
 #include "body_traits.hpp"
 #include "../type.hpp"
-#include "../../platform_socket.hpp"
+#include "common/platform_socket.hpp"
 
 enum RoleState {
     RoleState_Uninitialised,
@@ -29,7 +29,7 @@ std::ostream& operator<<(std::ostream& o, const RoleState& state) {
     }
     return o;
 };
-namespace Packet {
+namespace P2P {
     struct ConnectResponseBody {
         sockaddr_in addr;
         RoleState role_state;

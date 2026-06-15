@@ -1,10 +1,10 @@
-#ifndef PACKET_PACKET_HPP
-#define PACKET_PACKET_HPP
+#ifndef P2P_PACKET_HPP
+#define P2P_PACKET_HPP
 
 #include <cstring>
 #include <new>
-#include "../metap/metap.hpp"
-#include "../platform_socket.hpp"
+#include "metap/metap.hpp"
+#include "common/platform_socket.hpp"
 #include "type.hpp"
 
 #include "body/body_traits.hpp"
@@ -21,7 +21,7 @@
 #include "body/pong_proj.hpp"
 #include "body/pong_ball.hpp"
 
-namespace Packet {
+namespace P2P {
     using BodyList = MetaP::TD_List<
         UninitializedBody,
         ConnectRequestBody,

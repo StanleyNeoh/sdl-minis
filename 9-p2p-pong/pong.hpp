@@ -3,8 +3,8 @@
 
 #include <algorithm>
 #include <iostream>
-#include "utils.hpp"
-#include "packet/packet.hpp"
+#include "common/utils.hpp"
+#include "p2p/packet.hpp"
 #include "imgui.h"
 
 struct Pong {
@@ -32,7 +32,7 @@ struct Pong {
             life = _life;
         }
 
-        void unpack(const Packet::PongProjBody& proj_body)  {
+        void unpack(const P2P::PongProjBody& proj_body)  {
             reset(
                 proj_body.proj_pos_x,
                 proj_body.proj_pos_y,
@@ -42,8 +42,8 @@ struct Pong {
             );
         }
 
-        Packet::PongProjBody pack() const {
-            return Packet::PongProjBody{
+        P2P::PongProjBody pack() const {
+            return P2P::PongProjBody{
                 .proj_pos_x = pos.x,
                 .proj_pos_y = pos.y,
                 .proj_vel_x = vel.x,
@@ -75,13 +75,13 @@ struct Pong {
             return o;
         }
 
-        void unpack(const Packet::PongPaddleBody& padbody) {
+        void unpack(const P2P::PongPaddleBody& padbody) {
             pos.y = padbody.pos_y;
             vy = padbody.vel_y;
         }
 
-        Packet::PongPaddleBody pack() const {
-            return Packet::PongPaddleBody{
+        P2P::PongPaddleBody pack() const {
+            return P2P::PongPaddleBody{
                 .pos_y = pos.y,
                 .vel_y = vy
             };
@@ -161,7 +161,7 @@ struct Pong {
             return o;
         }
 
-        void unpack(const Packet::PongBallBody& ballbody)  {
+        void unpack(const P2P::PongBallBody& ballbody)  {
             reset(
                 ballbody.ball_pos_x,
                 ballbody.ball_pos_y,
@@ -170,8 +170,8 @@ struct Pong {
             );
         }
 
-        Packet::PongBallBody pack() const {
-            return Packet::PongBallBody{
+        P2P::PongBallBody pack() const {
+            return P2P::PongBallBody{
                 .ball_pos_x = pos.x,
                 .ball_pos_y = pos.y,
                 .ball_vel_x = vel.x,
@@ -300,7 +300,7 @@ struct Pong {
         return o;
     }
 
-    void unpack(const Packet::PongConfigBody& config) {
+    void unpack(const P2P::PongConfigBody& config) {
         width = config.width;
         height = config.height;
         pad_h = config.pad_h;
@@ -324,8 +324,8 @@ struct Pong {
         );
     }
 
-    Packet::PongConfigBody pack() const {
-        return Packet::PongConfigBody{
+    P2P::PongConfigBody pack() const {
+        return P2P::PongConfigBody{
             .width = width,
             .height = height,
             .pad_h = pad_h,
