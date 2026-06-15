@@ -121,31 +121,37 @@ namespace Rand {
         }
 
         float query(int x, int y) {
-            float fr = static_cast<float>(y) / ch;
-            float fc = static_cast<float>(x) / cw;
-            int r = fr; // int component
-            int c = fc; // int component
-            fr -= r; // frac component
-            fc -= c; // frac component
+            if (x < 0) x = 0;
+            if (y < 0) y = 0;
+            if (x >= width) x = width - 1;
+            if (y >= height) y = height - 1;
 
-            Vec2& v00 = board[r * (M + 1) + c];
-            Vec2& v01 = board[r * (M + 1) + c + 1];
-            Vec2& v10 = board[(r + 1) * (M + 1) + c];
-            Vec2& v11 = board[(r + 1) * (M + 1) + c + 1];
-            float u = fade(fr);
-            float v = fade(fc);
-            float dx = fc * cw;
-            float dy = fr * ch;
-            return lerp(u,
-                lerp(v, 
-                    v00.x * dx + v00.y * dy, 
-                    v01.x * (1.0 - dx) + v01.y * dy
-                ),
-                lerp(v, 
-                    v10.x * dx + v10.y * (1.0 - dy), 
-                    v11.x * (1.0 - dx) + v11.y * (1.0 - dy)
-                )
-            );
+            float gx = static_cast<float>(x) / cw;
+            float gy = static_cast<float>(y) / ch;
+
+            int c = static_cast<int>(gx);
+            int r = static_cast<int>(gy);
+            if (c >= M) c = M - 1;
+            if (r >= N) r = N - 1;
+
+            float xf = gx - c;
+            float yf = gy - r;
+
+            const Vec2& g00 = board[r * (M + 1) + c];
+            const Vec2& g10 = board[r * (M + 1) + c + 1];
+            const Vec2& g01 = board[(r + 1) * (M + 1) + c];
+            const Vec2& g11 = board[(r + 1) * (M + 1) + c + 1];
+
+            float n00 = g00.x * xf + g00.y * yf;
+            float n10 = g10.x * (xf - 1.0f) + g10.y * yf;
+            float n01 = g01.x * xf + g01.y * (yf - 1.0f);
+            float n11 = g11.x * (xf - 1.0f) + g11.y * (yf - 1.0f);
+
+            float u = fade(xf);
+            float v = fade(yf);
+            float nx0 = lerp(u, n00, n10);
+            float nx1 = lerp(u, n01, n11);
+            return lerp(v, nx0, nx1);
         }
     };
 };
