@@ -117,7 +117,7 @@ struct App {
                     proj.pos.y = paddle.pos.y + paddle.h / 2;
                     proj.life = 1.0;
                     proj.vel.x = to_left ? -20.0 : 20.0;
-                    proj.vel.y = 0;
+                    proj.vel.y = paddle.vy;
                     proj_update = true;
                 }
             };

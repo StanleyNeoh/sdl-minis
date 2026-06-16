@@ -208,47 +208,71 @@ struct Pong {
         rightProj.reset();
     }
 
-        State step(float dt) {
-        ball.pos.x = ball.pos.x + ball.vel.x * dt;
-        ball.pos.y = ball.pos.y + ball.vel.y * dt;
-          leftP.pos.y = SDL_clamp(leftP.pos.y + leftP.vy * dt, 0, height - leftP.h);
-          rightP.pos.y = SDL_clamp(rightP.pos.y + rightP.vy * dt, 0, height - rightP.h);
-        if (leftProj.life >= 0) {
-            leftProj.pos.x += leftProj.vel.x * dt;
-            leftProj.pos.y += leftProj.vel.y * dt;
-            leftProj.life -= dt;
-        }
-        if (rightProj.life >= 0) {
-            rightProj.pos.x += rightProj.vel.x * dt;
-            rightProj.pos.y += rightProj.vel.y * dt;
-            rightProj.life -= dt;
-        }
-        if (ball.pos.y - ball.r < 0) {
-            ball.pos.y = ball.r;
-            if (ball.vel.y < 0) ball.vel.y = -ball.vel.y;
-        }
-        if (ball.pos.x - ball.r < 0) {
-            return State_Left_Wins;
-        }
-        if (ball.pos.y + ball.r > height) {
-            ball.pos.y = height - ball.r;
-            if (ball.vel.y > 0) ball.vel.y = -ball.vel.y;
-        }
-        if (ball.pos.x + ball.r > width) {
-            return State_Right_Wins;
-        }
-        Ball::OverlapInfo info;
-        if (ball.overlap_paddle(leftP, info) && info.normal.dot(ball.vel) < 0) {
-            float scale = ball.vel.dot(info.normal);
-            ball.vel.x -= info.normal.x * 2 * scale;
-            ball.vel.y -= info.normal.y * 2 * scale;
-        }
-        if (ball.overlap_paddle(rightP, info) && info.normal.dot(ball.vel) < 0) {
-            float scale = ball.vel.dot(info.normal);
-            ball.vel.x -= info.normal.x * 2 * scale;
-            ball.vel.y -= info.normal.y * 2 * scale;
-        }
-        auto resolve_proj_collision = [&](Projection& proj) {
+    State step(float dt) {
+        auto step_ball = [&](Ball& ball) {
+            ball.pos.x = ball.pos.x + ball.vel.x * dt;
+            ball.pos.y = ball.pos.y + ball.vel.y * dt;
+            if (ball.pos.y - ball.r < 0) {
+                ball.pos.y = ball.r;
+                if (ball.vel.y < 0) ball.vel.y = -ball.vel.y;
+            }
+            if (ball.pos.x - ball.r < 0) {
+                return State_Left_Wins;
+            }
+            if (ball.pos.y + ball.r > height) {
+                ball.pos.y = height - ball.r;
+                if (ball.vel.y > 0) ball.vel.y = -ball.vel.y;
+            }
+            if (ball.pos.x + ball.r > width) {
+                return State_Right_Wins;
+            }
+
+            Ball::OverlapInfo info;
+            if (ball.overlap_paddle(leftP, info) && info.normal.dot(ball.vel) < 0) {
+                float scale = ball.vel.dot(info.normal);
+                ball.vel.x -= info.normal.x * 2 * scale;
+                ball.vel.y -= info.normal.y * 2 * scale;
+            }
+            if (ball.overlap_paddle(rightP, info) && info.normal.dot(ball.vel) < 0) {
+                float scale = ball.vel.dot(info.normal);
+                ball.vel.x -= info.normal.x * 2 * scale;
+                ball.vel.y -= info.normal.y * 2 * scale;
+            }
+            return State_Ongoing;
+        };
+
+        auto step_paddle = [&](Paddle& paddle) {
+            paddle.pos.y = paddle.pos.y + paddle.vy * dt;
+            if (paddle.pos.y < 0) {
+                paddle.pos.y = 0;
+                paddle.vy = 0;
+            } else if (paddle.pos.y > height - paddle.h) {
+                paddle.pos.y = height - paddle.h;
+                paddle.vy = 0;
+            }
+        };
+
+        auto step_proj = [&](Projection& proj) {
+            if (proj.life >= 0) {
+                proj.pos.x += proj.vel.x * dt;
+                proj.pos.y += proj.vel.y * dt;
+                proj.life -= dt;
+            }
+            if (proj.pos.y - proj.r < 0) {
+                proj.pos.y = proj.r;
+                if (proj.vel.y < 0) proj.vel.y = -proj.vel.y;
+            }
+            if (proj.pos.y + proj.r > height) {
+                proj.pos.y = height - proj.r;
+                if (proj.vel.y > 0) proj.vel.y = -proj.vel.y;
+            }
+
+            Ball::OverlapInfo info;
+            if (!ball.overlap_proj(proj, info)) return;
+            Vec2 rel_vel(ball.vel.x - proj.vel.x, ball.vel.y - proj.vel.y);
+            float rel_normal_speed = rel_vel.dot(info.normal);
+            if (rel_normal_speed >= 0.0f) return;
+
             // u1 + u2 = v1 + v2
             // u1^2 + u2^2 = v1^2 + v2^2
             // u1^2 - v1^2 = v2^2 - u2^2
@@ -259,12 +283,6 @@ struct Pong {
             // u2 = v1
             // u1 + (u2 - u1) = v1
             // u2 - (u2 - u1) = v2
-
-            if (!ball.overlap_proj(proj, info)) return;
-
-            Vec2 rel_vel(ball.vel.x - proj.vel.x, ball.vel.y - proj.vel.y);
-            float rel_normal_speed = rel_vel.dot(info.normal);
-            if (rel_normal_speed >= 0.0f) return;
 
             // Equal-mass, perfectly elastic impulse along the contact normal.
             ball.vel.x -= info.normal.x * rel_normal_speed;
@@ -286,9 +304,12 @@ struct Pong {
             }
         };
 
-        resolve_proj_collision(leftProj);
-        resolve_proj_collision(rightProj);
-        return State_Ongoing;
+        auto state = step_ball(ball);
+        step_paddle(leftP);
+        step_paddle(rightP);
+        step_proj(leftProj);
+        step_proj(rightProj);
+        return state;
     }
 
     friend std::ostream& operator<<(std::ostream& o, const Pong& pong) {
