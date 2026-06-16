@@ -154,14 +154,18 @@ struct App {
                 }
                 case SDL_KEYUP: {
                     auto key = event.key.keysym.sym;
+                    const Uint8* state = SDL_GetKeyboardState(NULL);
                     switch (key) {
                         case SDLK_w:
-                        case SDLK_s:
+                        case SDLK_s: {
+                            if (state[SDL_SCANCODE_W] || state[SDL_SCANCODE_S]) break;
                             paddle.move(0);
                             paddle_update = true;
                             break;
+                        }
                         case SDLK_UP:
                         case SDLK_DOWN:
+                            if (state[SDL_SCANCODE_UP] || state[SDL_SCANCODE_DOWN]) break;
                             other_paddle.move(0);
                             paddle_update = true;
                             break;
