@@ -285,9 +285,10 @@ struct App {
                             reset_to_state(AppState_Pong);
                             break;
                         }
-                        case Game::Shooter:
-                            std::cout << "Set to shooter\n";
+                        case Game::Shooter: 
                             reset_to_state(AppState_Shooter);
+                            break;
+                        default:
                             break;
                         }
                     }

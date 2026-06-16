@@ -20,11 +20,11 @@ namespace MetaP {
         ~Variant() {}
 
         Variant(const Variant& other) {
-            std::memcpy(this, &other, sizeof(Variant));
+            std::memcpy(reinterpret_cast<void*>(this), &other, sizeof(Variant));
         }
 
         Variant(Variant&& other) noexcept {
-            std::memcpy(this, &other, sizeof(Variant));
+            std::memcpy(reinterpret_cast<void*>(this), &other, sizeof(Variant));
         }
 
         Variant& operator=(const Variant& other) {
@@ -36,7 +36,7 @@ namespace MetaP {
 
         Variant& operator=(Variant&& other) noexcept {
             if (this != &other) {
-                std::memcpy(this, &other, sizeof(Variant));
+                std::memcpy(reinterpret_cast<void*>(this), &other, sizeof(Variant));
             }
             return *this;
         }
