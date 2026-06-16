@@ -115,7 +115,7 @@ struct App {
                 if (proj.life < 0) {
                     proj.pos.x = paddle.pos.x;
                     proj.pos.y = paddle.pos.y + paddle.h / 2;
-                    proj.life = 0.5;
+                    proj.life = 1.0;
                     proj.vel.x = to_left ? -20.0 : 20.0;
                     proj.vel.y = 0;
                     proj_update = true;
@@ -302,6 +302,9 @@ struct App {
     void draw_app() {
         if (app_state == AppState_WindowClosed) return;
         bool isOpen = true;
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
         if (ImGui::Begin("Game", &isOpen)) {
             ImVec2 windowSize = ImGui::GetContentRegionAvail();
             float rightPanelWidth = 200.0f; // Or windowSize.x * 0.3f for percentage
