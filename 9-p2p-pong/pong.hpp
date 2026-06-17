@@ -267,6 +267,8 @@ struct Pong {
     Ball ball;
     Paddle leftP;
     Paddle rightP;
+    int clientScore = 0;
+    int masterScore = 0;
 
     Pong(float width = 30.0, float height = 30.0, float ball_r = 1.0, float pad_h = 3.0, float pad_m = 1.0): 
         width(width), 

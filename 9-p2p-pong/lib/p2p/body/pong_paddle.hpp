@@ -7,7 +7,7 @@
 
 namespace P2P {
     struct PongPaddleBody {
-        constexpr static int N_PROJ = 3;
+        constexpr static int N_PROJ = 1;
         struct ProjBody {
             float proj_pos_x;
             float proj_pos_y;

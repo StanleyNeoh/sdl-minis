@@ -178,6 +178,12 @@ struct App {
                             reset_to_state(AppState_Pong);
                             break;
                         }
+                        case SDLK_g: {
+                            pong.clientScore = 0;
+                            pong.masterScore = 0;
+                            messages.push_back("Score resetted!");
+                            break;
+                        }
                     }
                     break;
                 }
@@ -242,11 +248,15 @@ struct App {
             Pong::State state = pong.step(frame_stopwatch.delta() / 1000.0f);
             switch (state) {
             case Pong::State_Right_Wins:
+                pong.clientScore++;
                 messages.push_back("Client won!");
+                messages.push_back("Score= " + std::to_string(pong.clientScore) + " : " + std::to_string(pong.masterScore));
                 reset_to_state(AppState_GameSelect);
                 break;
             case Pong::State_Left_Wins:
+                pong.masterScore++;
                 messages.push_back("Master won!");
+                messages.push_back("Score= " + std::to_string(pong.clientScore) + " : " + std::to_string(pong.masterScore));
                 reset_to_state(AppState_GameSelect);
                 break;
             default:
