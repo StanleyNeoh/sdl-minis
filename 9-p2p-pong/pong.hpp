@@ -54,20 +54,47 @@ struct Pong {
     };
 
     struct Paddle {
+        constexpr static float VY = 20;
+        constexpr static float P_AY = 50;
+        constexpr static float P_VY = 30;
+        constexpr static float P_VX = 30;
+
         Vec2 pos;
         float vy = 0;
         float h;
+
+        float pay = 0;
+        float pvy = 0;
 
         Paddle(float x, float y, float h): pos(x, y), vy(0), h(h) {}
 
         void move(float vy) {
             this->vy = vy;
+            if (vy > 0) {
+                this->pay = P_AY;
+            } else if (vy < 0) {
+                this->pay = -P_AY;
+            } else {
+                this->pay = 0;
+            }
+        }
+
+        void shoot(Pong::Projection& proj, bool to_left) {
+            if (proj.life >= 0) return;
+            proj.pos.x = pos.x;
+            proj.pos.y = pos.y + h / 2;
+            proj.life = 1.0;
+            proj.vel.x = to_left ? -VY : VY;
+            proj.vel.y = pvy;
         }
 
         void reset(float x, float y, float _h) {
             pos.x = x;
             pos.y = y;
             h = _h;
+            vy = 0;
+            pvy = 0;
+            pay = 0;
         }
 
         friend std::ostream& operator<<(std::ostream& o, const Paddle& paddle) {
@@ -77,13 +104,18 @@ struct Pong {
 
         void unpack(const P2P::PongPaddleBody& padbody) {
             pos.y = padbody.pos_y;
-            vy = padbody.vel_y;
+            pay = padbody.p_acc_y;
+            pvy = padbody.p_vel_y;
+            pay = padbody.p_acc_y;
+            pvy = padbody.p_vel_y;
         }
 
         P2P::PongPaddleBody pack() const {
             return P2P::PongPaddleBody{
                 .pos_y = pos.y,
-                .vel_y = vy
+                .vel_y = vy,
+                .p_acc_y = pay,
+                .p_vel_y = pvy
             };
         }
     };
@@ -242,6 +274,14 @@ struct Pong {
         };
 
         auto step_paddle = [&](Paddle& paddle) {
+            float pay = abs(paddle.pay) > 1e-6
+                ? paddle.pay
+                : paddle.pvy > 0 
+                ? -Paddle::P_AY
+                : paddle.pvy < 0
+                ? Paddle::P_AY
+                : 0;
+            paddle.pvy = SDL_clamp(paddle.pvy + pay * dt, -Paddle::P_VY, Paddle::P_VY);
             paddle.pos.y = paddle.pos.y + paddle.vy * dt;
             if (paddle.pos.y < 0) {
                 paddle.pos.y = 0;
@@ -380,11 +420,19 @@ struct Pong {
             return ImVec2(boardMin.x + x * scaleX, boardMin.y + y * scaleY);
         };
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        auto draw_paddle = [&](const Pong::Paddle& paddle, ImU32 color) {
+        auto draw_paddle = [&](const Pong::Paddle& paddle, ImU32 color, float pvx) {
             float depth = 0.7f;
             ImVec2 paddleMin = world_to_screen(paddle.pos.x - depth / 2, paddle.pos.y);
             ImVec2 paddleMax = world_to_screen(paddle.pos.x + depth / 2, paddle.pos.y + paddle.h);
             drawList->AddRectFilled(paddleMin, paddleMax, color, 4.0f);
+
+            Vec2 arrow(pvx, paddle.pvy);
+            Vec2 paddleCenter(paddle.pos.x + depth / 2, paddle.pos.y + paddle.h / 2);
+            arrow.normalise();
+
+            ImVec2 arrowStart = world_to_screen(paddleCenter.x, paddleCenter.y);
+            ImVec2 arrowEnd = world_to_screen(paddleCenter.x + arrow.x * 5, paddleCenter.y + arrow.y * 5);
+            drawList->AddLine(arrowStart, arrowEnd, color, 1.0f);
         };
         auto draw_proj = [&](const Pong::Projection& proj, ImU32 color) {
             if (proj.life < 0) return;
@@ -400,8 +448,8 @@ struct Pong {
         ImVec2 centerBottom = world_to_screen(width * 0.5f, height);
         drawList->AddLine(centerTop, centerBottom, IM_COL32(90, 90, 90, 255), 1.0f);
 
-        draw_paddle(leftP, IM_COL32(104, 211, 145, 255));
-        draw_paddle(rightP, IM_COL32(95, 145, 255, 255));
+        draw_paddle(leftP, IM_COL32(104, 211, 145, 255), Paddle::P_VX);
+        draw_paddle(rightP, IM_COL32(95, 145, 255, 255), -Paddle::P_VX);
         draw_proj(leftProj, IM_COL32(104, 211, 145, 125));
         draw_proj(rightProj, IM_COL32(95, 145, 255, 125));
 

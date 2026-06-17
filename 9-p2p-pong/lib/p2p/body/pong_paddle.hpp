@@ -9,6 +9,8 @@ namespace P2P {
     struct PongPaddleBody {
         float pos_y;
         float vel_y;
+        float p_acc_y;
+        float p_vel_y;
 
         bool serialize(char* buf) const {
             char* ptr = buf;
@@ -19,6 +21,8 @@ namespace P2P {
             };
             mmemcpy(ptr, pos_y);
             mmemcpy(ptr, vel_y);
+            mmemcpy(ptr, p_acc_y);
+            mmemcpy(ptr, p_vel_y);
             return true;
         }
 
@@ -32,6 +36,8 @@ namespace P2P {
             };
             mmemcpy(ptr, pos_y);
             mmemcpy(ptr, vel_y);
+            mmemcpy(ptr, p_acc_y);
+            mmemcpy(ptr, p_vel_y);
             return true;
         }
     };

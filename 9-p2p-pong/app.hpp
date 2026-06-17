@@ -92,6 +92,7 @@ struct App {
             client_vote = Game::Uninitialized;
         } else if (_app_state == AppState_Pong) {
             app_state = AppState_Pong;
+            pong.reset();
         } else if (_app_state == AppState_Shooter) {
             app_state = AppState_Shooter;
         }
@@ -111,16 +112,6 @@ struct App {
             auto& other_paddle = !is_master ? pong.rightP : pong.leftP;
             auto& proj = is_master ? pong.rightProj : pong.leftProj;
             auto& other_proj = !is_master ? pong.rightProj : pong.leftProj;
-            auto shoot_projectile = [&](Pong::Projection& proj, const Pong::Paddle& paddle, bool to_left) {
-                if (proj.life < 0) {
-                    proj.pos.x = paddle.pos.x;
-                    proj.pos.y = paddle.pos.y + paddle.h / 2;
-                    proj.life = 1.0;
-                    proj.vel.x = to_left ? -20.0 : 20.0;
-                    proj.vel.y = paddle.vy;
-                    proj_update = true;
-                }
-            };
             switch (event.type) {
                 case SDL_KEYDOWN: {
                     auto key = event.key.keysym.sym;
@@ -142,10 +133,12 @@ struct App {
                             paddle_update = true;
                             break;
                         case SDLK_SPACE:
-                            shoot_projectile(proj, paddle, is_master);
+                            paddle.shoot(proj, is_master);
+                            proj_update = true;
                             break;
                         case SDLK_RSHIFT:
-                            shoot_projectile(other_proj, other_paddle, !is_master);
+                            other_paddle.shoot(other_proj, !is_master);
+                            proj_update = true;
                             break;
                         default:
                             break;
@@ -271,7 +264,7 @@ struct App {
         } else if (app_state == AppState_GameSelect) {
             if (client_vote == master_vote && master_vote != Game::Uninitialized) {
                 if (vote_confirm_countdown < 0) {
-                    vote_confirm_countdown = 5000;
+                    vote_confirm_countdown = 1000;
                 } else if (vote_confirm_countdown > 0) {
                     vote_confirm_countdown -= frame_stopwatch.delta();
                     if (vote_confirm_countdown <= 0) vote_confirm_countdown = 0;
