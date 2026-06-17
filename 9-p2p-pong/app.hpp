@@ -168,6 +168,22 @@ struct App {
                 default:
                     break;
             }
+        } else if (app_state == AppState_GameSelect) {
+            // Hacky quick start pong with spacebar
+            switch (event.type) {
+                case SDL_KEYDOWN: {
+                    auto key = event.key.keysym.sym;
+                    switch (key) {
+                        case SDLK_SPACE: {
+                            reset_to_state(AppState_Pong);
+                            break;
+                        }
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
         }
     }
     
