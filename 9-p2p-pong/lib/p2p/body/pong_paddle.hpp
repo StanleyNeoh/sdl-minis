@@ -7,37 +7,76 @@
 
 namespace P2P {
     struct PongPaddleBody {
+        constexpr static int N_PROJ = 3;
+        struct ProjBody {
+            float proj_pos_x;
+            float proj_pos_y;
+            float proj_vel_x;
+            float proj_vel_y;
+            float proj_life;
+        };
         float pos_y;
         float vel_y;
         float p_acc_y;
         float p_vel_y;
+        uint32_t proj_i;
+        ProjBody projs[N_PROJ];
+
+        static void mmemcpy(char*& ptr, float x) {
+            uint32_t y = encode_f32(x);
+            memcpy(ptr, &y, sizeof(y));
+            ptr += sizeof(x);
+        }
+        static void mmemcpy(char*& ptr, uint32_t x) {
+            uint32_t y = htonl(x);
+            memcpy(ptr, &y, sizeof(y));
+            ptr += sizeof(y);
+        }
+
+        static void mmempst(const char*& ptr, float& x) {
+            uint32_t y;
+            memcpy(&y, ptr, sizeof(x));
+            x = decode_f32(y);
+            ptr += sizeof(x);
+        }
+        static auto mmempst(const char*& ptr, uint32_t& x) {
+            uint32_t y;
+            memcpy(&y, ptr, sizeof(y));
+            x = ntohl(x);
+            ptr += sizeof(x);
+        }
 
         bool serialize(char* buf) const {
             char* ptr = buf;
-            auto mmemcpy = [](char*& ptr, float x) {
-                uint32_t y = encode_f32(x);
-                memcpy(ptr, &y, sizeof(y));
-                ptr += sizeof(x);
-            };
             mmemcpy(ptr, pos_y);
             mmemcpy(ptr, vel_y);
             mmemcpy(ptr, p_acc_y);
             mmemcpy(ptr, p_vel_y);
+            mmemcpy(ptr, proj_i);
+            for (int i = 0; i < 5; i++) {
+                mmemcpy(ptr, projs[i].proj_pos_x);
+                mmemcpy(ptr, projs[i].proj_pos_y);
+                mmemcpy(ptr, projs[i].proj_vel_x);
+                mmemcpy(ptr, projs[i].proj_vel_y);
+                mmemcpy(ptr, projs[i].proj_life);
+            }
             return true;
         }
 
         bool deserialize(const char* buf) {
             const char* ptr = buf;
-            auto mmemcpy = [](const char*& ptr, float& x) {
-                uint32_t y;
-                memcpy(&y, ptr, sizeof(x));
-                x = decode_f32(y);
-                ptr += sizeof(x);
-            };
-            mmemcpy(ptr, pos_y);
-            mmemcpy(ptr, vel_y);
-            mmemcpy(ptr, p_acc_y);
-            mmemcpy(ptr, p_vel_y);
+            mmempst(ptr, pos_y);
+            mmempst(ptr, vel_y);
+            mmempst(ptr, p_acc_y);
+            mmempst(ptr, p_vel_y);
+            mmempst(ptr, proj_i);
+            for (int i = 0; i < 5; i++) {
+                mmempst(ptr, projs[i].proj_pos_x);
+                mmempst(ptr, projs[i].proj_pos_y);
+                mmempst(ptr, projs[i].proj_vel_x);
+                mmempst(ptr, projs[i].proj_vel_y);
+                mmempst(ptr, projs[i].proj_life);
+            }
             return true;
         }
     };

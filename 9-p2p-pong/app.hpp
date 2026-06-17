@@ -110,8 +110,6 @@ struct App {
             bool is_master = role_state == RoleState_Master;
             auto& paddle = is_master ? pong.rightP : pong.leftP;
             auto& other_paddle = !is_master ? pong.rightP : pong.leftP;
-            auto& proj = is_master ? pong.rightProj : pong.leftProj;
-            auto& other_proj = !is_master ? pong.rightProj : pong.leftProj;
             switch (event.type) {
                 case SDL_KEYDOWN: {
                     auto key = event.key.keysym.sym;
@@ -133,12 +131,12 @@ struct App {
                             paddle_update = true;
                             break;
                         case SDLK_SPACE:
-                            paddle.shoot(proj, is_master);
-                            proj_update = true;
+                            paddle.shoot(!is_master);
+                            paddle_update = true;
                             break;
                         case SDLK_RSHIFT:
-                            other_paddle.shoot(other_proj, !is_master);
-                            proj_update = true;
+                            other_paddle.shoot(is_master);
+                            paddle_update = true;
                             break;
                         default:
                             break;
@@ -205,10 +203,6 @@ struct App {
                 auto& paddle = role_state == RoleState_Master ? pong.leftP : pong.rightP;
                 paddle.unpack(pong_paddle);
             },
-            [&](const P2P::PongProjBody& pong_proj) {
-                auto& proj = role_state == RoleState_Master ? pong.leftProj : pong.rightProj; 
-                proj.unpack(pong_proj);
-            },
             [&](const P2P::PongBallBody& pong_ball) {
                 pong.ball.unpack(pong_ball);
             }
@@ -247,12 +241,6 @@ struct App {
                     auto& paddle = is_master ? pong.rightP : pong.leftP;
                     tcp_manager.outgoingQueue.push(P2P::Packet::create(
                         paddle.pack()
-                    ));
-                }
-                if (proj_update) {
-                    auto& proj = is_master ? pong.rightProj : pong.leftProj;
-                    tcp_manager.outgoingQueue.push(P2P::Packet::create(
-                        proj.pack()
                     ));
                 }
                 if (is_master) {
