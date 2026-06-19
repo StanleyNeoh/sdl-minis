@@ -3,7 +3,7 @@
 
 #include "body_traits.hpp"
 #include "../type.hpp"
-#include "common/platform_socket.hpp"
+#include "lib/common/platform_socket.hpp"
 
 namespace P2P {
     struct MessageBody {

@@ -1,8 +1,8 @@
 #include "game_select.hpp"
 
 #include "p2p/tcp_manager.hpp"
-#include "app.hpp"
-#include "pong.hpp"
+#include "app/app.hpp"
+#include "app/pong.hpp"
 
 namespace GameSelect {
     GameSelect game_select;

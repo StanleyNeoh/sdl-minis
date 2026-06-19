@@ -1,5 +1,5 @@
 #include "discover.hpp"
-#include "app.hpp"
+#include "app/app.hpp"
 #include "p2p/tcp_manager.hpp"
 
 namespace Discover {

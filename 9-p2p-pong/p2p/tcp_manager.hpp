@@ -7,9 +7,9 @@
 #include <cstring>
 #include <cstddef>
 #include <SDL.h>
-#include "common/platform_socket.hpp"
-#include "common/pipe.hpp"
-#include "common/logger.hpp"
+#include "lib/common/platform_socket.hpp"
+#include "lib/common/pipe.hpp"
+#include "lib/common/logger.hpp"
 #include "packet.hpp"
 #include "reader.hpp"
 #include "type.hpp"

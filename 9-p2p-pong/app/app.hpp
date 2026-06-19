@@ -7,11 +7,12 @@
 #include <string>
 #include "discover/discover.hpp"
 #include "p2p/p2p.hpp"
-#include "common/utils.hpp"
+#include "lib/common/utils.hpp"
 #include "pong.hpp"
 #include "shooter.hpp"
 #include "imgui.h"
-#include "game_select.hpp"
+#include "game_select/game_select.hpp"
+
 namespace App {
     enum AppState {
         AppState_WindowClosed,

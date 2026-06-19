@@ -1,8 +1,8 @@
-#ifndef GAME_SELECT_HPP
-#define GAME_SELECT_HPP
+#ifndef APP_GAME_SELECT_GAME_SELECT_HPP
+#define APP_GAME_SELECT_GAME_SELECT_HPP
 
 #include "p2p/type.hpp"
-#include "pong.hpp"
+#include "app/pong.hpp"
 
 namespace GameSelect {
     struct GameSelect {

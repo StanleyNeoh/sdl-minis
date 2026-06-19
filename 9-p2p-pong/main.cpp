@@ -15,9 +15,9 @@
 #include <cstring>
 #include <atomic>
 #include <shared_mutex>
-#include "common/platform_socket.hpp"
-#include "common/logger.hpp"
-#include "app.hpp"
+#include "lib/common/platform_socket.hpp"
+#include "lib/common/logger.hpp"
+#include "app/app.hpp"
 
 // Main code
 int main(int argc, char** args)

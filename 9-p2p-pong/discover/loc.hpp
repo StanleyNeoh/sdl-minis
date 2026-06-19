@@ -2,7 +2,7 @@
 #define DISCOVER_LOC_HPP
 
 #include <sstream>
-#include "common/common.hpp"
+#include "lib/common/common.hpp"
 
 namespace Discover {
     constexpr static size_t MAX_NAME_SIZE = 31;

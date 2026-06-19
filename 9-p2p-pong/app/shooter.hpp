@@ -3,7 +3,7 @@
 
 #include <array>
 #include <SDL.h>
-#include "common/utils.hpp"
+#include "lib/common/utils.hpp"
 
 struct Shooter {
     Rand::Perlin2D<63, 63> perlin;
