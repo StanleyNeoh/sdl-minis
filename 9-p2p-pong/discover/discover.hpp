@@ -196,7 +196,7 @@ namespace Discover {
         }
     };
 
-    Discover discover;
+    extern Discover discover;
 }
 
 #endif

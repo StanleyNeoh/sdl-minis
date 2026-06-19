@@ -173,11 +173,11 @@ namespace P2P {
         }
 
         void sendConnectResponse(const sockaddr_in& addr, bool is_master) {
-            RoleType role_state = is_master ? RoleType_Master : RoleType_Client;
+            RoleType role_type = is_master ? RoleType_Master : RoleType_Client;
             return incomingQueue.push(Packet::create(
                 ConnectResponseBody{
                     .addr = addr,
-                    .role_state = role_state
+                    .role_type = role_type
                 }
             ));
         }
@@ -206,7 +206,7 @@ namespace P2P {
         }
     };
 
-    TcpManager tcp_manager;
+    extern TcpManager tcp_manager;
 }
 
 

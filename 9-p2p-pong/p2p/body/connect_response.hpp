@@ -8,7 +8,7 @@
 namespace P2P {
     struct ConnectResponseBody {
         sockaddr_in addr;
-        RoleType role_state;
+        RoleType role_type;
     };
 
     template <>

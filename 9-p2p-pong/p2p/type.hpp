@@ -2,6 +2,8 @@
 #define P2P_TYPE_HPP
 
 #include <cstdint>
+#include <sstream>
+#include <string>
 
 namespace P2P {
     enum Type: uint32_t {
@@ -26,7 +28,7 @@ namespace P2P {
         RoleType_SinglePlayer
     };
 
-    std::ostream& operator<<(std::ostream& o, const RoleType& state) {
+    inline std::ostream& operator<<(std::ostream& o, const RoleType& state) {
         switch (state) {
             case RoleType_Uninitialised:
                 o << "RoleType_Uninitialised";
@@ -43,6 +45,13 @@ namespace P2P {
         }
         return o;
     };
+
+    inline std::string to_string(RoleType role_type) {
+        std::stringstream ss;
+        ss << role_type;
+        return ss.str();
+    }
+
 
     enum GameType: uint32_t {
         GameType_Uninitialized,

@@ -4,7 +4,7 @@
 #include <cstring>
 #include <new>
 #include "metap/metap.hpp"
-#include "common/platform_socket.hpp"
+#include "common/common.hpp"
 #include "type.hpp"
 
 #include "body/body_traits.hpp"

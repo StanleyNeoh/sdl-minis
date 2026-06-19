@@ -88,7 +88,9 @@ struct Pong {
                     : proj_vy < 0
                     ? Paddle::P_AY
                     : 0;
-                proj_vy = SDL_clamp(proj_vy + _proj_ay * dt, -Paddle::P_VY, Paddle::P_VY);
+                proj_vy = proj_vy + _proj_ay * dt;
+                if (proj_vy < -Paddle::P_VY) proj_vy = -Paddle::P_VY;
+                else if (proj_vy > Paddle::P_VY) proj_vy = Paddle::P_VY;
             }
             pos.y = pos.y + vy * dt;
             if (pos.y < 0) {
