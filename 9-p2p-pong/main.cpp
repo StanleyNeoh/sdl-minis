@@ -134,8 +134,7 @@ int main(int argc, char** args)
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
-        App::app.drawDiscover();
-        App::app.draw_app();
+        App::app.draw();
 
         // Rendering
         ImGui::Render();

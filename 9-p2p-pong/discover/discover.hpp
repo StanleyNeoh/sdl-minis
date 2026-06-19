@@ -4,65 +4,14 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include <sstream>
 #include <unordered_map>
-#include "common/platform_socket.hpp"
-#include "common/logger.hpp"
-#include "common/utils.hpp"
-#include "common/pipe.hpp"
+#include "common/common.hpp"
+#include "imgui.h"
+#include "loc.hpp"
 
 namespace Discover {
     constexpr static size_t MAX_NEIGH = 1024;
-    constexpr static size_t MAX_NAME_SIZE = 31;
-
-    struct Loc {
-        enum State {
-            IsHost,
-            Available,
-            Unavailable,
-            Closed
-        };
-
-        sockaddr_in address;
-        State state = Available;
-        char name[MAX_NAME_SIZE + 1] = {0};
-        time_t timestamp = 0;
-
-        Loc() = default;
-        Loc(const sockaddr_in& address, std::string_view _name, State state = Available): address(address), state(state) {
-            _name = _name.substr(0, MAX_NAME_SIZE);
-            memcpy(name, _name.data(), _name.size());
-        }
-
-        bool operator==(const Loc& other) const {
-            return address == other.address;
-        }
-
-        friend std::ostream& operator<<(std::ostream& o, const Loc& loc) {
-            o << loc.name << "=" << loc.address;
-            return o;
-        }
-
-        friend std::ostream& operator<<(std::ostream& o, State state) {
-            switch (state) {
-                case IsHost:
-                    o << "Is Host";
-                    break;
-                case Available:
-                    o << "Available";
-                    break;
-                case Unavailable:
-                    o << "Unavailable";
-                    break;
-                case Closed:
-                    o << "Closed";
-                    break;
-                default:
-                    break;
-            }
-            return o;
-        }
-    };
-
     struct Action {
         enum Type {
             Kill
@@ -194,6 +143,8 @@ namespace Discover {
                 neighbours.erase(p);
             }
         }
+
+        void draw();
     };
 
     extern Discover discover;

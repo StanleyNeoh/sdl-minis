@@ -264,110 +264,60 @@ namespace App {
             }
         }
 
-        void draw_app() {
-            if (app_state == AppState_WindowClosed) return;
-            bool isOpen = true;
-            const ImGuiViewport* viewport = ImGui::GetMainViewport();
-            ImGui::SetNextWindowPos(viewport->WorkPos);
-            ImGui::SetNextWindowSize(viewport->WorkSize);
-            if (ImGui::Begin("Game", &isOpen)) {
-                ImVec2 windowSize = ImGui::GetContentRegionAvail();
-                float rightPanelWidth = 200.0f; // Or windowSize.x * 0.3f for percentage
-                float leftPanelWidth = windowSize.x - 200.0f; // Or windowSize.x * 0.3f for percentage
-                ImGui::BeginChild("LeftPanel", ImVec2(leftPanelWidth, 0), true);
+        void draw() {
+            if (app_state == AppState_WindowClosed) {
+                Discover::discover.draw();
+            } else {
+                bool isOpen = true;
+                const ImGuiViewport* viewport = ImGui::GetMainViewport();
+                ImGui::SetNextWindowPos(viewport->WorkPos);
+                ImGui::SetNextWindowSize(viewport->WorkSize);
+                if (ImGui::Begin("Game", &isOpen)) {
+                    ImVec2 windowSize = ImGui::GetContentRegionAvail();
+                    float rightPanelWidth = 200.0f; // Or windowSize.x * 0.3f for percentage
+                    float leftPanelWidth = windowSize.x - 200.0f; // Or windowSize.x * 0.3f for percentage
+                    ImGui::BeginChild("LeftPanel", ImVec2(leftPanelWidth, 0), true);
 
-                if (app_state == AppState_GameSelect) {
-                    GameSelect::game_select.draw(role_type, pong);
-                } else if (app_state == AppState_Pong) {
-                    pong.draw();
-                } else if (app_state == AppState_Shooter) {
-                    shooter.draw();
-                }
-                ImGui::EndChild();
-
-                ImGui::SameLine();
-                ImGui::BeginChild("RightPanel", ImVec2(rightPanelWidth, 0), true);
-
-                ImGui::SeparatorText("Chat");
-                if (ImGui::BeginChild("chat_messages", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders)) {
-                    for (const auto& message: messages) {
-                        ImGui::TextWrapped("%s", message.c_str());
+                    if (app_state == AppState_GameSelect) {
+                        GameSelect::game_select.draw(role_type, pong);
+                    } else if (app_state == AppState_Pong) {
+                        pong.draw();
+                    } else if (app_state == AppState_Shooter) {
+                        shooter.draw();
                     }
-                }
-                ImGui::EndChild();
+                    ImGui::EndChild();
 
-                bool sendChat = ImGui::InputText("##chat_input", chatInput, sizeof(chatInput), ImGuiInputTextFlags_EnterReturnsTrue);
-                ImGui::SameLine();
-                sendChat = ImGui::Button("Send") || sendChat;
-                if (sendChat && chatInput[0] != '\0') {
-                    if (P2P::tcp_manager.sendMessage(chatInput)) {
-                        messages.push_back(std::string("Me: ") + chatInput);
-                        chatInput[0] = '\0';
-                    } else {
-                        messages.push_back("Failed to send: no active TCP connection");
-                    }
-                }
-                ImGui::EndChild();
-            }
-            ImGui::End();
+                    ImGui::SameLine();
+                    ImGui::BeginChild("RightPanel", ImVec2(rightPanelWidth, 0), true);
 
-            if (!isOpen) {
-                P2P::tcp_manager.disconnect();
-                reset_to_state(AppState_WindowClosed);
-            }
-        }
-
-        void drawDiscover() {
-            ImGui::Begin("LAN Users");
-            ImGui::Text("User: %s", Discover::discover.config.ownLoc.name);
-            if (ImGui::BeginTable("neighbour_table", 3, ImGuiTableFlags_Borders, ImVec2(-FLT_MIN, 0.0))) {
-                ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthStretch, 3.0f);
-                ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch, 2.0f);
-                ImGui::TableSetupColumn("Connect", ImGuiTableColumnFlags_WidthFixed, 120.0f);
-                ImGui::TableHeadersRow();
-                {
-                    for (auto& p: Discover::discover.neighbours) {
-                        Discover::Loc& neigh = p.second;
-                        std::string address;
-                        std::string state;
-                        bool isHost = neigh.address == Discover::discover.config.ownLoc.address;
-                        {
-                            std::stringstream ss;
-                            ss << neigh;
-                            address = ss.str();
-                            ss.str("");
-                            if (isHost) {
-                                ss << Discover::Loc::IsHost;
-                            } else {
-                                ss << neigh.state;
-                            }
-                            state = ss.str();
+                    ImGui::SeparatorText("Chat");
+                    if (ImGui::BeginChild("chat_messages", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders)) {
+                        for (const auto& message: messages) {
+                            ImGui::TextWrapped("%s", message.c_str());
                         }
-
-                        ImGui::TableNextRow();
-                        ImGui::TableSetColumnIndex(0);
-                        ImGui::Text("%s", address.data());
-                        ImGui::TableSetColumnIndex(1);
-                        ImGui::Text("%s", state.data());
-                        ImGui::TableSetColumnIndex(2);
-                        float cellWidth = ImGui::GetContentRegionAvail().x;
-                        ImGui::PushID(address.data());
-                        ImGui::BeginDisabled(neigh.state != Discover::Loc::Available);
-                        if (ImGui::Button("Chat", ImVec2{cellWidth, 20.0f})) {
-                            if (isHost) {
-                                role_type = P2P::RoleType_SinglePlayer;
-                                reset_to_state(AppState_GameSelect);
-                            } else {
-                                P2P::tcp_manager.connect(neigh.address);
-                            }
-                        }
-                        ImGui::EndDisabled();
-                        ImGui::PopID();
                     }
-                    ImGui::EndTable();
+                    ImGui::EndChild();
+
+                    bool sendChat = ImGui::InputText("##chat_input", chatInput, sizeof(chatInput), ImGuiInputTextFlags_EnterReturnsTrue);
+                    ImGui::SameLine();
+                    sendChat = ImGui::Button("Send") || sendChat;
+                    if (sendChat && chatInput[0] != '\0') {
+                        if (P2P::tcp_manager.sendMessage(chatInput)) {
+                            messages.push_back(std::string("Me: ") + chatInput);
+                            chatInput[0] = '\0';
+                        } else {
+                            messages.push_back("Failed to send: no active TCP connection");
+                        }
+                    }
+                    ImGui::EndChild();
+                }
+                ImGui::End();
+
+                if (!isOpen) {
+                    P2P::tcp_manager.disconnect();
+                    reset_to_state(AppState_WindowClosed);
                 }
             }
-            ImGui::End();
         }
     };
 
