@@ -2,7 +2,6 @@
 #define APP_GAME_SELECT_GAME_SELECT_HPP
 
 #include "p2p/type.hpp"
-#include "app/pong.hpp"
 
 namespace GameSelect {
     struct GameSelect {
@@ -30,7 +29,7 @@ namespace GameSelect {
             int& id
         );
 
-        void draw(P2P::RoleType role_type, Pong& pong_ref);
+        void draw();
     };
 
     extern GameSelect game_select;

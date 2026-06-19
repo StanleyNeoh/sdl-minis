@@ -2,7 +2,7 @@
 
 #include "p2p/tcp_manager.hpp"
 #include "app/app.hpp"
-#include "app/pong.hpp"
+#include "pong/pong.hpp"
 
 namespace GameSelect {
     GameSelect game_select;
@@ -51,7 +51,9 @@ namespace GameSelect {
         ImGui::PopID();
     }
 
-    void GameSelect::draw(P2P::RoleType role_type, Pong& pong_ref) {
+    void GameSelect::draw() {
+        P2P::RoleType& role_type = App::app.role_type;
+
         ImGui::Text("Role: %s", P2P::to_string(role_type).c_str());
         ImGui::Separator();
         if (ImGui::BeginTable("GameSelectTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
@@ -101,10 +103,10 @@ namespace GameSelect {
             if (is_master && vote_confirm_countdown <= 0) {
                 switch (master_vote) {
                 case P2P::GameType_Pong: {
-                    pong_ref.reset();
+                    Pong::pong.reset();
                     if (is_send) {
                         P2P::tcp_manager.outgoingQueue.try_push(P2P::Packet::create(
-                            pong_ref.pack()
+                            Pong::pong.pack()
                         ));
                     }
                     App::app.reset_to_state(App::AppState_Pong);

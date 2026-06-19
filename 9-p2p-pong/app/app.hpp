@@ -5,12 +5,12 @@
 #include <mutex>
 #include <shared_mutex>
 #include <string>
+#include "imgui.h"
+#include "lib/common/utils.hpp"
 #include "discover/discover.hpp"
 #include "p2p/p2p.hpp"
-#include "lib/common/utils.hpp"
-#include "pong.hpp"
-#include "shooter.hpp"
-#include "imgui.h"
+#include "pong/pong.hpp"
+#include "shooter/shooter.hpp"
 #include "game_select/game_select.hpp"
 
 namespace App {
@@ -52,21 +52,15 @@ namespace App {
         // Pong State
         bool paddle_update = false;
         bool proj_update = false;
-        Pong pong;
 
-        // Shooter State
-        Shooter shooter;
-
-        bool initialise(std::string_view name, u_int16_t gamePort) {
+        bool initialise(std::string_view name, u_int16_t gamePort, SDL_Renderer* renderer) {
             if (is_initialised) return false;
             Discover::discover.initialise(Discover::Config(name, gamePort));
             P2P::tcp_manager.initialise(P2P::TcpManager::Config(gamePort));
+            Shooter::shooter.initialise(renderer);
             return true;
         }
         
-        void load_renderer(SDL_Renderer* renderer) {
-            shooter.initialize_texture(renderer);
-        }
         
         void reset_to_state(AppState _app_state) {
             if (_app_state == AppState_WindowClosed) {
@@ -78,7 +72,7 @@ namespace App {
                 GameSelect::game_select.reset();
             } else if (_app_state == AppState_Pong) {
                 app_state = AppState_Pong;
-                pong.reset();
+                Pong::pong.reset();
             } else if (_app_state == AppState_Shooter) {
                 app_state = AppState_Shooter;
             }
@@ -94,8 +88,8 @@ namespace App {
         void process_sdl_events(const SDL_Event& event) {
             if (app_state == AppState_Pong) {
                 bool is_master = role_type == P2P::RoleType_Master;
-                auto& paddle = is_master ? pong.rightP : pong.leftP;
-                auto& other_paddle = !is_master ? pong.rightP : pong.leftP;
+                auto& paddle = is_master ? Pong::pong.rightP : Pong::pong.leftP;
+                auto& other_paddle = !is_master ? Pong::pong.rightP : Pong::pong.leftP;
                 switch (event.type) {
                     case SDL_KEYDOWN: {
                         auto key = event.key.keysym.sym;
@@ -165,8 +159,8 @@ namespace App {
                                 break;
                             }
                             case SDLK_g: {
-                                pong.clientScore = 0;
-                                pong.masterScore = 0;
+                                Pong::pong.clientScore = 0;
+                                Pong::pong.masterScore = 0;
                                 messages.push_back("Score resetted!");
                                 break;
                             }
@@ -204,15 +198,15 @@ namespace App {
                     }
                 },
                 [&](const P2P::PongConfigBody& pong_config) {
-                    pong.unpack(pong_config);
+                    Pong::pong.unpack(pong_config);
                     reset_to_state(AppState_Pong);
                 },
                 [&](const P2P::PongPaddleBody& pong_paddle) {
-                    auto& paddle = role_type == P2P::RoleType_Master ? pong.leftP : pong.rightP;
+                    auto& paddle = role_type == P2P::RoleType_Master ? Pong::pong.leftP : Pong::pong.rightP;
                     paddle.unpack(pong_paddle);
                 },
                 [&](const P2P::PongBallBody& pong_ball) {
-                    pong.ball.unpack(pong_ball);
+                    Pong::pong.ball.unpack(pong_ball);
                 }
             );
 
@@ -231,18 +225,18 @@ namespace App {
             bool is_master = role_type == P2P::RoleType_Master;
             if (app_state == AppState_Pong) {
                 Logger logger("Pong");
-                Pong::State state = pong.step(frame_stopwatch.delta() / 1000.0f);
+                Pong::State state = Pong::pong.step(frame_stopwatch.delta() / 1000.0f);
                 switch (state) {
                 case Pong::State_Right_Wins:
-                    pong.clientScore++;
+                    Pong::pong.clientScore++;
                     messages.push_back("Client won!");
-                    messages.push_back("Score= " + std::to_string(pong.clientScore) + " : " + std::to_string(pong.masterScore));
+                    messages.push_back("Score= " + std::to_string(Pong::pong.clientScore) + " : " + std::to_string(Pong::pong.masterScore));
                     reset_to_state(AppState_GameSelect);
                     break;
                 case Pong::State_Left_Wins:
-                    pong.masterScore++;
+                    Pong::pong.masterScore++;
                     messages.push_back("Master won!");
-                    messages.push_back("Score= " + std::to_string(pong.clientScore) + " : " + std::to_string(pong.masterScore));
+                    messages.push_back("Score= " + std::to_string(Pong::pong.clientScore) + " : " + std::to_string(Pong::pong.masterScore));
                     reset_to_state(AppState_GameSelect);
                     break;
                 default:
@@ -250,14 +244,14 @@ namespace App {
                 }
                 if (role_type != P2P::RoleType_SinglePlayer) {
                     if (paddle_update) {
-                        auto& paddle = is_master ? pong.rightP : pong.leftP;
+                        auto& paddle = is_master ? Pong::pong.rightP : Pong::pong.leftP;
                         P2P::tcp_manager.outgoingQueue.push(P2P::Packet::create(
                             paddle.pack()
                         ));
                     }
                     if (is_master) {
                         P2P::tcp_manager.outgoingQueue.push(P2P::Packet::create(
-                            pong.ball.pack()
+                            Pong::pong.ball.pack()
                         ));
                     }
                 }
@@ -280,11 +274,11 @@ namespace App {
                     ImGui::BeginChild("LeftPanel", ImVec2(leftPanelWidth, 0), true);
 
                     if (app_state == AppState_GameSelect) {
-                        GameSelect::game_select.draw(role_type, pong);
+                        GameSelect::game_select.draw();
                     } else if (app_state == AppState_Pong) {
-                        pong.draw();
+                        Pong::pong.draw();
                     } else if (app_state == AppState_Shooter) {
-                        shooter.draw();
+                        Shooter::shooter.draw();
                     }
                     ImGui::EndChild();
 

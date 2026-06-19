@@ -27,9 +27,6 @@ int main(int argc, char** args)
         logger.log("Help: prog <tcp_port> <name>");
         return 0;
     }
-    App::app.initialise(args[2], std::stoi(args[1]));
-    bool windowOpen = false;
-    char chatInput[128] = {0};
 
     // Setup SDL
     #ifdef _WIN32
@@ -65,7 +62,6 @@ int main(int argc, char** args)
     SDL_GetRendererInfo(renderer, &info);
     logger.log("Current SDL_Renderer: ", info.name);
 
-
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -86,7 +82,10 @@ int main(int argc, char** args)
     ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer2_Init(renderer);
 
-    App::app.load_renderer(renderer);
+    // Initialise App
+    App::app.initialise(args[2], std::stoi(args[1]), renderer);
+    bool windowOpen = false;
+    char chatInput[128] = {0};
 
     // Main loop
     bool done = false;
