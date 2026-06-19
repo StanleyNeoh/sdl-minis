@@ -96,7 +96,7 @@ int main(int argc, char** args)
         // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
         // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
         // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
-        App::app.begin_process();
+        App::app.process_setup();
 
         SDL_Event event;
         while (SDL_PollEvent(&event))
@@ -120,7 +120,6 @@ int main(int argc, char** args)
             }
         }
         App::app.process_events();
-        App::app.end_process();
 
         if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED)
         {

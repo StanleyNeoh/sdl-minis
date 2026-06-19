@@ -3,9 +3,10 @@
 
 #include <algorithm>
 #include <iostream>
-#include "lib/common/utils.hpp"
+#include "lib/common/common.hpp"
 #include "p2p/packet.hpp"
 #include "imgui.h"
+#include "SDL.h"
 
 namespace Pong {
     enum State {
@@ -263,14 +264,15 @@ namespace Pong {
     };
 
     struct Pong {
-
-        float width;
-        float height;
-        float pad_h;
-        float pad_m;
+        float width = 30.0;
+        float height = 30.0;
+        float pad_h = 3.0;
+        float pad_m = 1.0;
         Ball ball;
         Paddle leftP;
         Paddle rightP;
+
+        bool paddle_update = false;
         int clientScore = 0;
         int masterScore = 0;
 
@@ -394,7 +396,15 @@ namespace Pong {
             };
         }
 
+        void process_setup();
+        void process_sdl_event(const SDL_Event& event);
+        void process_packet(P2P::Packet& packet);
+        void process_takedown();
+
         void draw() {
+            process_takedown();
+
+            // Drawing logic
             ImVec2 avail = ImGui::GetContentRegionAvail();
             float canvasSide = std::min(avail.x, avail.y);
 
