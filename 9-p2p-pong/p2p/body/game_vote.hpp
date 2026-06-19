@@ -5,17 +5,9 @@
 #include "../type.hpp"
 #include "common/platform_socket.hpp"
 
-namespace Game {
-    enum Type: uint32_t {
-        Uninitialized,
-        Pong,
-        Shooter
-    };
-}
-
 namespace P2P {
     struct GameVoteBody {
-        Game::Type type;
+        GameType type;
 
         bool serialize(char* buf) const {
             uint32_t x = static_cast<uint32_t>(type);
@@ -26,7 +18,7 @@ namespace P2P {
         bool deserialize(const char* buf) {
             uint32_t x;
             memcpy(&x, buf, sizeof(x));
-            type = static_cast<Game::Type>(x);
+            type = static_cast<GameType>(x);
             return true;
         }
     };

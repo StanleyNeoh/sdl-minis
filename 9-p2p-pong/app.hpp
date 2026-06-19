@@ -6,22 +6,11 @@
 #include <shared_mutex>
 #include <string>
 #include "discover.hpp"
-#include "p2p/tcp_manager.hpp"
+#include "p2p/p2p.hpp"
 #include "common/utils.hpp"
 #include "pong.hpp"
 #include "shooter.hpp"
 #include "imgui.h"
-
-struct Timer {
-    Uint64 last_time = 0;
-
-    bool has_elapsed(Uint64 interval_ms) {
-        Uint64 now = SDL_GetTicks64();
-        if(now - last_time <= interval_ms) return false;
-        last_time = now;
-        return true;
-    }
-};
 
 struct Stopwatch {
     Uint64 last_time = 0;
@@ -42,7 +31,6 @@ struct Stopwatch {
 
 struct App {
     Discover discover;
-    P2P::TcpManager tcp_manager;
 
     // AppState
     enum AppState {
@@ -52,7 +40,7 @@ struct App {
         AppState_Shooter
     };
     AppState app_state = AppState_WindowClosed;
-    RoleState role_state = RoleState_Uninitialised;
+    P2P::RoleType role_state = P2P::RoleType_Uninitialised;
     Stopwatch frame_stopwatch;
 
     // Chat State
@@ -60,8 +48,8 @@ struct App {
     char chatInput[128] = {0};
 
     // Game Select
-    Game::Type client_vote = Game::Uninitialized;
-    Game::Type master_vote = Game::Uninitialized;
+    P2P::GameType client_vote = P2P::GameType_Uninitialized;
+    P2P::GameType master_vote = P2P::GameType_Uninitialized;
     int64_t vote_confirm_countdown = -1;
 
     // Pong State
@@ -73,8 +61,10 @@ struct App {
     Shooter shooter;
 
     App(std::string_view name, u_int16_t gamePort):
-        discover(Discover::Config(name, gamePort)),
-        tcp_manager(P2P::TcpManager::Config(gamePort)) {}
+        discover(Discover::Config(name, gamePort))
+    {
+        P2P::tcp_manager.initialise(P2P::TcpManager::Config(gamePort));
+    }
     
     void load_renderer(SDL_Renderer* renderer) {
         shooter.initialize_texture(renderer);
@@ -83,13 +73,13 @@ struct App {
     void reset_to_state(AppState _app_state) {
         if (_app_state == AppState_WindowClosed) {
             app_state = AppState_WindowClosed;
-            role_state = RoleState_SinglePlayer;
+            role_state = P2P::RoleType_SinglePlayer;
             messages.clear();
         } else if (_app_state == AppState_GameSelect) {
             app_state = AppState_GameSelect;
             vote_confirm_countdown = -1;
-            master_vote = Game::Uninitialized;
-            client_vote = Game::Uninitialized;
+            master_vote = P2P::GameType_Uninitialized;
+            client_vote = P2P::GameType_Uninitialized;
         } else if (_app_state == AppState_Pong) {
             app_state = AppState_Pong;
             pong.reset();
@@ -107,7 +97,7 @@ struct App {
     
     void process_sdl_events(const SDL_Event& event) {
         if (app_state == AppState_Pong) {
-            bool is_master = role_state == RoleState_Master;
+            bool is_master = role_state == P2P::RoleType_Master;
             auto& paddle = is_master ? pong.rightP : pong.leftP;
             auto& other_paddle = !is_master ? pong.rightP : pong.leftP;
             switch (event.type) {
@@ -211,7 +201,7 @@ struct App {
                 messages.push_back(std::string("Peer: ") + message.message);
             },
             [&](const P2P::GameVoteBody& game_vote) {
-                if (role_state == RoleState_Master) {
+                if (role_state == P2P::RoleType_Master) {
                     client_vote = game_vote.type;
                 } else {
                     master_vote = game_vote.type;
@@ -222,7 +212,7 @@ struct App {
                 reset_to_state(AppState_Pong);
             },
             [&](const P2P::PongPaddleBody& pong_paddle) {
-                auto& paddle = role_state == RoleState_Master ? pong.leftP : pong.rightP;
+                auto& paddle = role_state == P2P::RoleType_Master ? pong.leftP : pong.rightP;
                 paddle.unpack(pong_paddle);
             },
             [&](const P2P::PongBallBody& pong_ball) {
@@ -231,7 +221,7 @@ struct App {
         );
 
         P2P::Packet packet;
-        while (tcp_manager.incomingQueue.try_pop(packet)) {
+        while (P2P::tcp_manager.incomingQueue.try_pop(packet)) {
             callbacks.dispatch<
                 MetaP::TT_TVIsEquals<P2P::TV_BodyType>::type,
                 MetaP::TO_VariantCast
@@ -242,7 +232,7 @@ struct App {
     void end_process() {
         if (app_state == AppState_WindowClosed) return;
         Uint64 now = SDL_GetTicks64();
-        bool is_master = role_state == RoleState_Master;
+        bool is_master = role_state == P2P::RoleType_Master;
         if (app_state == AppState_Pong) {
             Logger logger("Pong");
             Pong::State state = pong.step(frame_stopwatch.delta() / 1000.0f);
@@ -262,21 +252,21 @@ struct App {
             default:
                 break;
             }
-            if (role_state != RoleState_SinglePlayer) {
+            if (role_state != P2P::RoleType_SinglePlayer) {
                 if (paddle_update) {
                     auto& paddle = is_master ? pong.rightP : pong.leftP;
-                    tcp_manager.outgoingQueue.push(P2P::Packet::create(
+                    P2P::tcp_manager.outgoingQueue.push(P2P::Packet::create(
                         paddle.pack()
                     ));
                 }
                 if (is_master) {
-                    tcp_manager.outgoingQueue.push(P2P::Packet::create(
+                    P2P::tcp_manager.outgoingQueue.push(P2P::Packet::create(
                         pong.ball.pack()
                     ));
                 }
             }
         } else if (app_state == AppState_GameSelect) {
-            if (client_vote == master_vote && master_vote != Game::Uninitialized) {
+            if (client_vote == master_vote && master_vote != P2P::GameType_Uninitialized) {
                 if (vote_confirm_countdown < 0) {
                     vote_confirm_countdown = 1000;
                 } else if (vote_confirm_countdown > 0) {
@@ -284,19 +274,19 @@ struct App {
                     if (vote_confirm_countdown <= 0) vote_confirm_countdown = 0;
 
                     if (
-                        (is_master || role_state == RoleState_SinglePlayer)
+                        (is_master || role_state == P2P::RoleType_SinglePlayer)
                         && vote_confirm_countdown == 0
                     ) {
                         switch (master_vote) {
-                        case Game::Pong: {
+                        case P2P::GameType_Pong: {
                             pong.reset();
-                            tcp_manager.outgoingQueue.try_push(P2P::Packet::create(
+                            P2P::tcp_manager.outgoingQueue.try_push(P2P::Packet::create(
                                 pong.pack()
                             ));
                             reset_to_state(AppState_Pong);
                             break;
                         }
-                        case Game::Shooter: 
+                        case P2P::GameType_Shooter: 
                             reset_to_state(AppState_Shooter);
                             break;
                         default:
@@ -323,9 +313,9 @@ struct App {
             ImGui::BeginChild("LeftPanel", ImVec2(leftPanelWidth, 0), true);
 
             if (app_state == AppState_GameSelect) {
-                auto _checkbox = [&](bool master_checkbox, Game::Type game_type, int& id) {
-                    bool is_singleplayer = role_state == RoleState_SinglePlayer;
-                    bool is_master = role_state == RoleState_Master;
+                auto _checkbox = [&](bool master_checkbox, P2P::GameType game_type, int& id) {
+                    bool is_singleplayer = role_state == P2P::RoleType_SinglePlayer;
+                    bool is_master = role_state == P2P::RoleType_Master;
                     ImGui::PushID(++id);
                     ImGui::BeginDisabled(!is_singleplayer && is_master != master_checkbox);
                     bool checked = (master_checkbox ? master_vote : client_vote) == game_type;
@@ -337,7 +327,7 @@ struct App {
                                 client_vote = game_type;
                             }
                             if (!is_singleplayer) {
-                                tcp_manager.outgoingQueue.push(P2P::Packet::create(
+                                P2P::tcp_manager.outgoingQueue.push(P2P::Packet::create(
                                     P2P::GameVoteBody {
                                         .type = game_type
                                     }
@@ -345,14 +335,14 @@ struct App {
                             }
                         } else {
                             if (master_checkbox) {
-                                master_vote = Game::Uninitialized;
+                                master_vote = P2P::GameType_Uninitialized;
                             } else {
-                                client_vote = Game::Uninitialized;
+                                client_vote = P2P::GameType_Uninitialized;
                             }
                             if (!is_singleplayer) {
-                                tcp_manager.outgoingQueue.push(P2P::Packet::create(
+                                P2P::tcp_manager.outgoingQueue.push(P2P::Packet::create(
                                     P2P::GameVoteBody {
-                                        .type = Game::Uninitialized
+                                        .type = P2P::GameType_Uninitialized
                                     }
                                 ));
                             }
@@ -378,17 +368,17 @@ struct App {
                     ImGui::Text("Pong");
                     ImGui::TableSetColumnIndex(1);
                     int id = 0;
-                    _checkbox(true, Game::Pong, id);
+                    _checkbox(true, P2P::GameType_Pong, id);
                     ImGui::TableSetColumnIndex(2);
-                    _checkbox(false, Game::Pong, id);
+                    _checkbox(false, P2P::GameType_Pong, id);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     ImGui::Text("Shooter");
                     ImGui::TableSetColumnIndex(1);
-                    _checkbox(true, Game::Shooter, id);
+                    _checkbox(true, P2P::GameType_Shooter, id);
                     ImGui::TableSetColumnIndex(2);
-                    _checkbox(false, Game::Shooter, id);
+                    _checkbox(false, P2P::GameType_Shooter, id);
 
                     ImGui::EndTable();
                 }
@@ -417,7 +407,7 @@ struct App {
             ImGui::SameLine();
             sendChat = ImGui::Button("Send") || sendChat;
             if (sendChat && chatInput[0] != '\0') {
-                if (tcp_manager.sendMessage(chatInput)) {
+                if (P2P::tcp_manager.sendMessage(chatInput)) {
                     messages.push_back(std::string("Me: ") + chatInput);
                     chatInput[0] = '\0';
                 } else {
@@ -429,7 +419,7 @@ struct App {
         ImGui::End();
 
         if (!isOpen) {
-            tcp_manager.disconnect();
+            P2P::tcp_manager.disconnect();
             reset_to_state(AppState_WindowClosed);
         }
     }
@@ -472,10 +462,10 @@ struct App {
                     ImGui::BeginDisabled(neigh.state != Discover::Loc::Available);
                     if (ImGui::Button("Chat", ImVec2{cellWidth, 20.0f})) {
                         if (isHost) {
-                            role_state = RoleState_SinglePlayer;
+                            role_state = P2P::RoleType_SinglePlayer;
                             reset_to_state(AppState_GameSelect);
                         } else {
-                            tcp_manager.connect(neigh.address);
+                            P2P::tcp_manager.connect(neigh.address);
                         }
                     }
                     ImGui::EndDisabled();

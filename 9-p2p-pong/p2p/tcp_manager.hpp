@@ -12,18 +12,21 @@
 #include "common/logger.hpp"
 #include "packet.hpp"
 #include "reader.hpp"
+#include "type.hpp"
 
 namespace P2P {
     struct TcpManager {
         struct Config {
             u_int16_t port;
+            Config() = default;
             Config(u_int16_t port): port(port) {}
         };
 
-        const Config config;
+        Config config;
         std::thread listening_thread;
         SPSCQueue<Packet> incomingQueue;
         SPSCQueue<Packet> outgoingQueue;
+        bool is_initialised = false;
 
         // Used by listener routine only
         bool running; 
@@ -145,11 +148,15 @@ namespace P2P {
         }
 
 
-        TcpManager(const Config config):
-            config(config),
-            listening_thread(listener_routine, this) {}
+        bool initialise(const Config& _config) {
+            if (is_initialised) return false;
+            config = _config;
+            listening_thread = std::thread(listener_routine, this);
+            return true;
+        }
 
         ~TcpManager() {
+            if (!is_initialised) return;
             outgoingQueue.push(Packet::create(
                 KillRequestBody{}
             ));
@@ -165,7 +172,7 @@ namespace P2P {
         }
 
         void sendConnectResponse(const sockaddr_in& addr, bool is_master) {
-            RoleState role_state = is_master ? RoleState_Master : RoleState_Client;
+            RoleType role_state = is_master ? RoleType_Master : RoleType_Client;
             return incomingQueue.push(Packet::create(
                 ConnectResponseBody{
                     .addr = addr,
@@ -198,6 +205,7 @@ namespace P2P {
         }
     };
 
+    TcpManager tcp_manager;
 }
 
 

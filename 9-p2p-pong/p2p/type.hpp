@@ -18,6 +18,37 @@ namespace P2P {
         PongProjType,
         PongBallType,
     };
+
+    enum RoleType {
+        RoleType_Uninitialised,
+        RoleType_Master,
+        RoleType_Client,
+        RoleType_SinglePlayer
+    };
+
+    std::ostream& operator<<(std::ostream& o, const RoleType& state) {
+        switch (state) {
+            case RoleType_Uninitialised:
+                o << "RoleType_Uninitialised";
+                break;
+            case RoleType_Master:
+                o << "RoleType_Master";
+                break;
+            case RoleType_Client:
+                o << "RoleType_Client";
+                break;
+            case RoleType_SinglePlayer:
+                o << "RoleType_SinglePlayer";
+                break;
+        }
+        return o;
+    };
+
+    enum GameType: uint32_t {
+        GameType_Uninitialized,
+        GameType_Pong,
+        GameType_Shooter
+    };
 }
 
 #endif
