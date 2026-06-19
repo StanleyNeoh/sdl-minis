@@ -5,7 +5,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <string>
-#include "discover.hpp"
+#include "discover/discover.hpp"
 #include "p2p/p2p.hpp"
 #include "common/utils.hpp"
 #include "pong.hpp"
@@ -30,8 +30,6 @@ struct Stopwatch {
 };
 
 struct App {
-    Discover discover;
-
     // AppState
     enum AppState {
         AppState_WindowClosed,
@@ -60,9 +58,8 @@ struct App {
     // Shooter State
     Shooter shooter;
 
-    App(std::string_view name, u_int16_t gamePort):
-        discover(Discover::Config(name, gamePort))
-    {
+    App(std::string_view name, u_int16_t gamePort) {
+        Discover::discover.initialise(Discover::Config(name, gamePort));
         P2P::tcp_manager.initialise(P2P::TcpManager::Config(gamePort));
     }
     
@@ -185,7 +182,7 @@ struct App {
     
     void process_events() {
         Logger logger("App");
-        discover.process_events();
+        Discover::discover.process_events();
 
         static MetaP::Callbacks callbacks(
             [&](const P2P::ConnectResponseBody& connect_response) {
@@ -426,18 +423,18 @@ struct App {
 
     void drawDiscover() {
         ImGui::Begin("LAN Users");
-        ImGui::Text("User: %s", discover.config.ownLoc.name);
+        ImGui::Text("User: %s", Discover::discover.config.ownLoc.name);
         if (ImGui::BeginTable("neighbour_table", 3, ImGuiTableFlags_Borders, ImVec2(-FLT_MIN, 0.0))) {
             ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthStretch, 3.0f);
             ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch, 2.0f);
             ImGui::TableSetupColumn("Connect", ImGuiTableColumnFlags_WidthFixed, 120.0f);
             ImGui::TableHeadersRow();
             {
-                for (auto& p: discover.neighbours) {
+                for (auto& p: Discover::discover.neighbours) {
                     Discover::Loc& neigh = p.second;
                     std::string address;
                     std::string state;
-                    bool isHost = neigh.address == discover.config.ownLoc.address;
+                    bool isHost = neigh.address == Discover::discover.config.ownLoc.address;
                     {
                         std::stringstream ss;
                         ss << neigh;

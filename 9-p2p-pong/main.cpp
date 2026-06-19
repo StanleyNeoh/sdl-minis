@@ -17,7 +17,6 @@
 #include <shared_mutex>
 #include "common/platform_socket.hpp"
 #include "common/logger.hpp"
-#include "discover.hpp"
 #include "app.hpp"
 
 // Main code

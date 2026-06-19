@@ -150,6 +150,7 @@ namespace P2P {
 
         bool initialise(const Config& _config) {
             if (is_initialised) return false;
+            is_initialised = true;
             config = _config;
             listening_thread = std::thread(listener_routine, this);
             return true;
