@@ -27,7 +27,7 @@ int main(int argc, char** args)
         logger.log("Help: prog <tcp_port> <name>");
         return 0;
     }
-    App app(args[2], std::stoi(args[1]));
+    App::app.initialise(args[2], std::stoi(args[1]));
     bool windowOpen = false;
     char chatInput[128] = {0};
 
@@ -86,7 +86,7 @@ int main(int argc, char** args)
     ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer2_Init(renderer);
 
-    app.load_renderer(renderer);
+    App::app.load_renderer(renderer);
 
     // Main loop
     bool done = false;
@@ -97,13 +97,13 @@ int main(int argc, char** args)
         // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
         // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
         // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
-        app.begin_process();
+        App::app.begin_process();
 
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
             ImGui_ImplSDL2_ProcessEvent(&event);
-            app.process_sdl_events(event);
+            App::app.process_sdl_events(event);
             switch (event.type) {
                 case SDL_QUIT: {
                     done = true;
@@ -120,8 +120,8 @@ int main(int argc, char** args)
                     break;
             }
         }
-        app.process_events();
-        app.end_process();
+        App::app.process_events();
+        App::app.end_process();
 
         if (SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED)
         {
@@ -134,8 +134,8 @@ int main(int argc, char** args)
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
-        app.drawDiscover();
-        app.draw_app();
+        App::app.drawDiscover();
+        App::app.draw_app();
 
         // Rendering
         ImGui::Render();
