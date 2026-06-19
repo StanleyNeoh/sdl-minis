@@ -71,17 +71,17 @@ struct Vec2 {
 namespace Rand {
     static std::mt19937 engine(std::random_device{}());
 
-    int integer(int max, int min = 0) {
+    inline int integer(int max, int min = 0) {
         std::uniform_int_distribution<int> distribution(min, max);
         return distribution(engine);
     }
 
-    float real(float max = 1, float min = 0) {
+    inline float real(float max = 1, float min = 0) {
         std::uniform_real_distribution<float> distribution(min, max);
         return distribution(engine);
     }
 
-    Vec2 vec2_real(float length = 1) {
+    inline Vec2 vec2_real(float length = 1) {
         float d = Rand::real(2 * M_PI, 0);
         return Vec2(std::sin(d) * length, std::cos(d) * length);
     }

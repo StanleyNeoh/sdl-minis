@@ -66,7 +66,7 @@
 #include <utility>
 #include <iostream>
 
-sockaddr_in create_sockaddr(in_addr_t addr, in_port_t port, bool network_endian=false) {
+inline sockaddr_in create_sockaddr(in_addr_t addr, in_port_t port, bool network_endian=false) {
     sockaddr_in socketAddress;
     socketAddress.sin_family = AF_INET;
 	if (!network_endian) {
@@ -252,7 +252,7 @@ struct SocketResource {
 	}
 };
 
-in_addr_t own_ip_address() {
+inline in_addr_t own_ip_address() {
 	SocketResource socketResource(AF_INET, SOCK_DGRAM, 0);
 	sockaddr_in addr = create_sockaddr(INADDR_LOOPBACK, 123);
 	socketResource.connect(addr);
@@ -264,7 +264,7 @@ in_addr_t own_ip_address() {
 	return local.sin_addr.s_addr;
 }
 
-std::ostream& operator<<(std::ostream& o, const sockaddr_in& addr) {
+inline std::ostream& operator<<(std::ostream& o, const sockaddr_in& addr) {
 	char address[INET_ADDRSTRLEN] = {0};
 	inet_ntop(AF_INET, &addr.sin_addr.s_addr, address, sizeof(address));
 	o << address << ":" << ntohs(addr.sin_port);
@@ -286,13 +286,13 @@ struct std::hash<sockaddr_in> {
 	}
 };
 
-uint32_t encode_f32(float value) {
+inline uint32_t encode_f32(float value) {
     uint32_t bits = 0;
     memcpy(&bits, &value, sizeof(bits));
     return htonl(bits);
 }
 
-float decode_f32(uint32_t value) {
+inline float decode_f32(uint32_t value) {
     uint32_t bits = ntohl(value);
     float decoded = 0.0f;
     memcpy(&decoded, &bits, sizeof(decoded));
