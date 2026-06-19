@@ -12,6 +12,7 @@
 #include "pong/pong.hpp"
 #include "shooter/shooter.hpp"
 #include "game_select/game_select.hpp"
+#include "chat/chat.hpp"
 
 namespace App {
     enum AppState {
@@ -45,10 +46,6 @@ namespace App {
         bool is_initialised = false;
         Stopwatch frame_stopwatch;
 
-        // Chat State
-        std::vector<std::string> messages;
-        char chatInput[128] = {0};
-
         bool initialise(std::string_view name, u_int16_t gamePort, SDL_Renderer* renderer) {
             if (is_initialised) return false;
             Discover::discover.initialise(Discover::Config(name, gamePort));
@@ -62,7 +59,7 @@ namespace App {
             if (_app_state == AppState_WindowClosed) {
                 app_state = AppState_WindowClosed;
                 role_type = P2P::RoleType_SinglePlayer;
-                messages.clear();
+                Chat::chat.reset();
             } else if (_app_state == AppState_GameSelect) {
                 app_state = AppState_GameSelect;
                 GameSelect::game_select.reset();
@@ -77,6 +74,7 @@ namespace App {
         void process_setup() {
             if (app_state == AppState_WindowClosed) return;
             frame_stopwatch.step();
+            Chat::chat.process_setup();
             Pong::pong.process_setup();
         }
         
@@ -96,7 +94,7 @@ namespace App {
                             case SDLK_g: {
                                 Pong::pong.clientScore = 0;
                                 Pong::pong.masterScore = 0;
-                                messages.push_back("Score resetted!");
+                                Chat::chat.messages.push_back("Score resetted!");
                                 break;
                             }
                         }
@@ -122,9 +120,6 @@ namespace App {
                     logger.log("Disconnected from ", disconnect_response.addr);
                     reset_to_state(AppState_WindowClosed);
                 },
-                [&](const P2P::MessageBody& message) {
-                    messages.push_back(std::string("Peer: ") + message.message);
-                },
                 [&](const P2P::GameVoteBody& game_vote) {
                     if (role_type == P2P::RoleType_Master) {
                         GameSelect::game_select.client_vote = game_vote.type;
@@ -140,6 +135,7 @@ namespace App {
                     MetaP::TT_TVIsEquals<P2P::TV_BodyType>::type,
                     MetaP::TO_VariantCast
                 >(packet.type, packet.body);
+                Chat::chat.process_packet(packet);
                 Pong::pong.process_packet(packet);
             }
         }
@@ -169,26 +165,7 @@ namespace App {
 
                     ImGui::SameLine();
                     ImGui::BeginChild("RightPanel", ImVec2(rightPanelWidth, 0), true);
-
-                    ImGui::SeparatorText("Chat");
-                    if (ImGui::BeginChild("chat_messages", ImVec2(0.0f, 180.0f), ImGuiChildFlags_Borders)) {
-                        for (const auto& message: messages) {
-                            ImGui::TextWrapped("%s", message.c_str());
-                        }
-                    }
-                    ImGui::EndChild();
-
-                    bool sendChat = ImGui::InputText("##chat_input", chatInput, sizeof(chatInput), ImGuiInputTextFlags_EnterReturnsTrue);
-                    ImGui::SameLine();
-                    sendChat = ImGui::Button("Send") || sendChat;
-                    if (sendChat && chatInput[0] != '\0') {
-                        if (P2P::tcp_manager.sendMessage(chatInput)) {
-                            messages.push_back(std::string("Me: ") + chatInput);
-                            chatInput[0] = '\0';
-                        } else {
-                            messages.push_back("Failed to send: no active TCP connection");
-                        }
-                    }
+                    Chat::chat.draw();
                     ImGui::EndChild();
                 }
                 ImGui::End();
