@@ -1,11 +1,54 @@
 #include "game_select.hpp"
 
 #include "p2p/tcp_manager.hpp"
+#include "lib/metap/metap.hpp"
 #include "app/app.hpp"
+#include "chat/chat.hpp"
 #include "pong/pong.hpp"
+#include "SDL.h"
 
 namespace GameSelect {
     GameSelect game_select;
+
+    void GameSelect::process_sdl_event(const SDL_Event& event) {
+        switch (event.type) {
+            case SDL_KEYDOWN: {
+                auto key = event.key.keysym.sym;
+                switch (key) {
+                    case SDLK_SPACE: {
+                        App::app.reset_to_state(App::AppState_Pong);
+                        break;
+                    }
+                    case SDLK_g: {
+                        clientScore = 0;
+                        masterScore = 0;
+                        Chat::chat.messages.push_back("Score resetted!");
+                        break;
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    };
+
+    void GameSelect::process_packet(P2P::Packet& packet) {
+        static MetaP::Callbacks callbacks(
+            [&](const P2P::GameVoteBody& game_vote) {
+                if (App::app.role_type == P2P::RoleType_Master) {
+                    client_vote = game_vote.type;
+                } else {
+                    master_vote = game_vote.type;
+                }
+            }
+        );
+        callbacks.dispatch<
+            MetaP::TT_TVIsEquals<P2P::TV_BodyType>::type,
+            MetaP::TO_VariantCast
+        >(packet.type, packet.body);
+    }
+
 
     void GameSelect::draw_checkbox(
         P2P::RoleType role_type,

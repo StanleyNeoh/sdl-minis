@@ -76,33 +76,14 @@ namespace App {
             frame_stopwatch.step();
             Chat::chat.process_setup();
             Pong::pong.process_setup();
+            GameSelect::game_select.process_setup();
         }
         
         void process_sdl_events(const SDL_Event& event) {
             if (app_state == AppState_Pong) {
                 Pong::pong.process_sdl_event(event);
             } else if (app_state == AppState_GameSelect) {
-                // Hacky quick start pong with spacebar
-                switch (event.type) {
-                    case SDL_KEYDOWN: {
-                        auto key = event.key.keysym.sym;
-                        switch (key) {
-                            case SDLK_SPACE: {
-                                reset_to_state(AppState_Pong);
-                                break;
-                            }
-                            case SDLK_g: {
-                                Pong::pong.clientScore = 0;
-                                Pong::pong.masterScore = 0;
-                                Chat::chat.messages.push_back("Score resetted!");
-                                break;
-                            }
-                        }
-                        break;
-                    }
-                    default:
-                        break;
-                }
+                GameSelect::game_select.process_sdl_event(event);
             }
         }
         
@@ -119,13 +100,6 @@ namespace App {
                 [&](const P2P::DisconnectResponseBody& disconnect_response) {
                     logger.log("Disconnected from ", disconnect_response.addr);
                     reset_to_state(AppState_WindowClosed);
-                },
-                [&](const P2P::GameVoteBody& game_vote) {
-                    if (role_type == P2P::RoleType_Master) {
-                        GameSelect::game_select.client_vote = game_vote.type;
-                    } else {
-                        GameSelect::game_select.master_vote = game_vote.type;
-                    }
                 }
             );
 
@@ -135,6 +109,7 @@ namespace App {
                     MetaP::TT_TVIsEquals<P2P::TV_BodyType>::type,
                     MetaP::TO_VariantCast
                 >(packet.type, packet.body);
+                GameSelect::game_select.process_packet(packet);
                 Chat::chat.process_packet(packet);
                 Pong::pong.process_packet(packet);
             }
