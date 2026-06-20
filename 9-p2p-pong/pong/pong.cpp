@@ -98,7 +98,7 @@ namespace Pong {
             App::app.role_type == P2P::RoleType_Master ||
             App::app.role_type == P2P::RoleType_SinglePlayer
         );
-        bool is_send = App::app.role_type == P2P::RoleType_Master;
+        bool is_singleplayer = App::app.role_type == P2P::RoleType_SinglePlayer;
 
         State state = step(App::app.frame_stopwatch.delta() / 1000.0f);
         switch (state) {
@@ -120,7 +120,7 @@ namespace Pong {
             break;
         }
 
-        if (is_send) {
+        if (!is_singleplayer) {
             if (paddle_update) {
                 auto& paddle = is_master ? rightP : leftP;
                 P2P::tcp_manager.outgoingQueue.push(P2P::Packet::create(
