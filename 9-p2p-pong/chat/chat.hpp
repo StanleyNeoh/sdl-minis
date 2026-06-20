@@ -30,7 +30,6 @@ namespace Chat {
                 MetaP::TO_VariantCast
             >(packet.type, packet.body);
         };
-        void process_takedown() {};
 
         void draw() {
             ImGui::SeparatorText("Chat");

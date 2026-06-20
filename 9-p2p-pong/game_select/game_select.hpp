@@ -27,7 +27,6 @@ namespace GameSelect {
         void process_setup() {};
         void process_sdl_event(const SDL_Event& event);
         void process_packet(P2P::Packet& packet);
-        void process_takedown() {};
 
         void draw_checkbox(
             std::string_view id,

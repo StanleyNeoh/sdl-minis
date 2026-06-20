@@ -3,47 +3,71 @@
 
 #include <array>
 #include <SDL.h>
-#include "lib/common/utils.hpp"
+#include "lib/common/common.hpp"
+#include "p2p/p2p.hpp"
+#include "textures/textures.hpp"
 #include "imgui.h"
 
 namespace Shooter {
+    struct Ship {
+        Vec2 size{50.0, 50.0};
+        Vec2 pos{1000.0, 1000.0};
+        Vec2 vel{0.0, 0.0};
+        float deg = 0;
+    };
+
     struct Shooter {
-        Rand::Perlin2D<63, 63> perlin;
         SDL_Texture* tex = nullptr;
+        float width = 1000.0f;
+        float height = 1000.0f;
 
-        Shooter(float width = 1000, float height = 1000): perlin(width, height) {}
-
+        Ship ship1;
         void initialise(SDL_Renderer* renderer) {
             if (tex != nullptr) return;
             tex = SDL_CreateTexture(
                 renderer,
                 SDL_PIXELFORMAT_ARGB8888,
-                SDL_TEXTUREACCESS_STREAMING,
-                perlin.width,
-                perlin.height
+                SDL_TEXTUREACCESS_TARGET,
+                width,
+                height
             );
+            Textures::textures.initialise(renderer);
         }
+
+        void process_takedown();
 
         void draw() {
             if (tex == nullptr) return;
+            process_takedown();
+
             ImVec2 avail = ImGui::GetContentRegionAvail();
             float canvasSide = std::min(avail.x, avail.y);
-            ImVec2 canvasSize(canvasSide, canvasSide);
+            ImVec2 canvasSize = ImVec2{canvasSide, canvasSide};
 
-            void* pix = nullptr;
-            int pitch = 0;
-            if (SDL_LockTexture(tex, nullptr, &pix, &pitch)) return;
-            for (int r = 0; r < perlin.height; r++) {
-                char* row_start = reinterpret_cast<char*>(pix) + r * pitch;
-                for (int c = 0; c < perlin.width; c++) {
-                    float n = perlin.query(r, c);
-                    uint8_t v = (n * 0.5f + 0.5f) * 255;
-                    reinterpret_cast<uint32_t*>(row_start)[c] = (255 << 24) | (v << 16) | (v << 8) | v;
-                }
-            }
-            SDL_UnlockTexture(tex);
+            SDL_Renderer* renderer = Textures::textures.renderer;
+
+            SDL_SetRenderTarget(renderer, tex);
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+            SDL_RenderClear(renderer);
+            
+            SDL_FRect dst{
+                ship1.pos.x - ship1.size.x / 2,
+                ship1.pos.y - ship1.size.y / 2,
+                ship1.size.x,
+                ship1.size.y
+            };
+            SDL_RenderCopyExF(
+                renderer,
+                Textures::textures.get_ship_tex(),
+                nullptr,
+                &dst,
+                ship1.deg,
+                nullptr,
+                SDL_FLIP_NONE
+            );
+            SDL_SetRenderTarget(renderer, nullptr);
+
             ImGui::Image(tex, canvasSize);
-            perlin.reset();
         }
     };
 
