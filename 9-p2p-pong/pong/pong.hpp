@@ -82,17 +82,18 @@ namespace Pong {
 
         void step(float dt, float width, float height) {
             {
+                constexpr float proj_vy_thresh = 1e-2;
                 float _proj_ay = abs(proj_ay) > 1e-6
                     ? proj_ay
+                    : abs(proj_vy) < proj_vy_thresh
+                    ? 0
                     : proj_vy > 0 
                     ? -Paddle::P_AY
-                    : proj_vy < 0
-                    ? Paddle::P_AY
-                    : 0;
+                    : Paddle::P_AY;
                 proj_vy = proj_vy + _proj_ay * dt;
                 if (proj_vy < -Paddle::P_VY) proj_vy = -Paddle::P_VY;
                 else if (proj_vy > Paddle::P_VY) proj_vy = Paddle::P_VY;
-                else if (abs(proj_vy) < 1e-2) proj_vy = 0;
+                else if (abs(proj_vy) < proj_vy_thresh) proj_vy = 0;
             }
             pos.y = pos.y + vy * dt;
             if (pos.y < 0) {
