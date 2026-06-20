@@ -20,8 +20,8 @@ namespace GameSelect {
                         break;
                     }
                     case SDLK_g: {
-                        clientScore = 0;
-                        masterScore = 0;
+                        Pong::pong.leftScore = 0;
+                        Pong::pong.rightScore = 0;
                         Chat::chat.messages.push_back("Score resetted!");
                         break;
                     }

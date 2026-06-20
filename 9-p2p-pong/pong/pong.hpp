@@ -272,6 +272,8 @@ namespace Pong {
         Paddle leftP;
         Paddle rightP;
 
+        int leftScore = 0;
+        int rightScore = 0;
         bool paddle_update = false;
 
         Pong(float width = 30.0, float height = 30.0, float ball_r = 1.0, float pad_h = 3.0, float pad_m = 1.0): 
@@ -336,8 +338,8 @@ namespace Pong {
             collide_ball_paddle(ball, rightP);
 
             // Check win state
-            if (ball.pos.x - ball.r < 0) return State_Left_Wins;
-            if (ball.pos.x + ball.r > width) return State_Right_Wins;
+            if (ball.pos.x - ball.r < 0) return State_Right_Wins;
+            if (ball.pos.x + ball.r > width) return State_Left_Wins;
             return State_Ongoing;
         }
 

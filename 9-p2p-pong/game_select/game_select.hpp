@@ -10,8 +10,6 @@ namespace GameSelect {
         P2P::GameType client_vote = P2P::GameType_Uninitialized;
         P2P::GameType master_vote = P2P::GameType_Uninitialized;
         int64_t vote_confirm_countdown = -1;
-        int clientScore = 0;
-        int masterScore = 0;
 
         bool is_initialised = false;
 

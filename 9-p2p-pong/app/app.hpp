@@ -58,7 +58,6 @@ namespace App {
         void reset_to_state(AppState _app_state) {
             if (_app_state == AppState_WindowClosed) {
                 app_state = AppState_WindowClosed;
-                role_type = P2P::RoleType_SinglePlayer;
                 Chat::chat.reset();
             } else if (_app_state == AppState_GameSelect) {
                 app_state = AppState_GameSelect;

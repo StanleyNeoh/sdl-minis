@@ -103,18 +103,16 @@ namespace Pong {
         State state = step(App::app.frame_stopwatch.delta() / 1000.0f);
         switch (state) {
         case State_Right_Wins: {
-            auto& masterScore = GameSelect::game_select.masterScore;
-            auto& clientScore = ++GameSelect::game_select.clientScore;
-            Chat::chat.messages.push_back("Client won!");
-            Chat::chat.messages.push_back("Score= " + std::to_string(clientScore) + " : " + std::to_string(masterScore));
+            ++rightScore;
+            Chat::chat.messages.push_back("Right won!");
+            Chat::chat.messages.push_back("Score = " + std::to_string(leftScore) + " : " + std::to_string(rightScore));
             App::app.reset_to_state(App::AppState_GameSelect);
             break;
         }
         case State_Left_Wins: {
-            auto& masterScore = ++GameSelect::game_select.masterScore;
-            auto& clientScore = GameSelect::game_select.clientScore;
-            Chat::chat.messages.push_back("Master won!");
-            Chat::chat.messages.push_back("Score= " + std::to_string(clientScore) + " : " + std::to_string(masterScore));
+            ++leftScore;
+            Chat::chat.messages.push_back("Left won!");
+            Chat::chat.messages.push_back("Score = " + std::to_string(leftScore) + " : " + std::to_string(rightScore));
             App::app.reset_to_state(App::AppState_GameSelect);
             break;
         }
