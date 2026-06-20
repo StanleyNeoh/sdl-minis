@@ -7,8 +7,8 @@
 
 namespace GameSelect {
     struct GameSelect {
-        P2P::GameType client_vote = P2P::GameType_Uninitialized;
-        P2P::GameType master_vote = P2P::GameType_Uninitialized;
+        P2P::GameType my_vote = P2P::GameType_Uninitialized;
+        P2P::GameType other_vote = P2P::GameType_Uninitialized;
         int64_t vote_confirm_countdown = -1;
 
         bool is_initialised = false;
@@ -20,8 +20,8 @@ namespace GameSelect {
 
         void reset() {
             vote_confirm_countdown = -1;
-            master_vote = P2P::GameType_Uninitialized;
-            client_vote = P2P::GameType_Uninitialized;
+            my_vote = P2P::GameType_Uninitialized;
+            other_vote = P2P::GameType_Uninitialized;
         }
 
         void process_setup() {};
@@ -30,10 +30,10 @@ namespace GameSelect {
         void process_takedown() {};
 
         void draw_checkbox(
-            P2P::RoleType role_type,
-            bool master_checkbox, 
+            std::string_view id,
+            P2P::GameType& vote,
             P2P::GameType game_type,
-            int& id
+            bool mine
         );
         void draw();
     };

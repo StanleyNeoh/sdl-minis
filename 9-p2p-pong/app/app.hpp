@@ -65,6 +65,11 @@ namespace App {
             } else if (_app_state == AppState_Pong) {
                 app_state = AppState_Pong;
                 Pong::pong.reset();
+                if (role_type == P2P::RoleType_Master) {
+                    P2P::tcp_manager.outgoingQueue.try_push(P2P::Packet::create(
+                        Pong::pong.pack()
+                    ));
+                }
             } else if (_app_state == AppState_Shooter) {
                 app_state = AppState_Shooter;
             }

@@ -10,6 +10,10 @@
 namespace GameSelect {
     GameSelect game_select;
 
+    bool is_singleplayer() {
+        return App::app.role_type == P2P::RoleType_SinglePlayer;
+    }
+
     void GameSelect::process_sdl_event(const SDL_Event& event) {
         switch (event.type) {
             case SDL_KEYDOWN: {
@@ -36,11 +40,7 @@ namespace GameSelect {
     void GameSelect::process_packet(P2P::Packet& packet) {
         static MetaP::Callbacks callbacks(
             [&](const P2P::GameVoteBody& game_vote) {
-                if (App::app.role_type == P2P::RoleType_Master) {
-                    client_vote = game_vote.type;
-                } else {
-                    master_vote = game_vote.type;
-                }
+                other_vote = game_vote.type;
             }
         );
         callbacks.dispatch<
@@ -51,43 +51,23 @@ namespace GameSelect {
 
 
     void GameSelect::draw_checkbox(
-        P2P::RoleType role_type,
-        bool master_checkbox, 
+        std::string_view id,
+        P2P::GameType& vote,
         P2P::GameType game_type,
-        int& id
+        bool mine
     ) {
-        bool is_singleplayer = role_type == P2P::RoleType_SinglePlayer;
-        bool is_master = role_type == P2P::RoleType_Master;
-        ImGui::PushID(++id);
-        ImGui::BeginDisabled(!is_singleplayer && is_master != master_checkbox);
-        bool checked = (master_checkbox ? master_vote : client_vote) == game_type;
-        if (ImGui::Checkbox("Vote", &checked)) {
-            if (checked) {
-                if (master_checkbox) {
-                    master_vote = game_type;
-                } else {
-                    client_vote = game_type;
-                }
-                if (!is_singleplayer) {
-                    P2P::tcp_manager.outgoingQueue.push(P2P::Packet::create(
-                        P2P::GameVoteBody {
-                            .type = game_type
-                        }
-                    ));
-                }
-            } else {
-                if (master_checkbox) {
-                    master_vote = P2P::GameType_Uninitialized;
-                } else {
-                    client_vote = P2P::GameType_Uninitialized;
-                }
-                if (!is_singleplayer) {
-                    P2P::tcp_manager.outgoingQueue.push(P2P::Packet::create(
-                        P2P::GameVoteBody {
-                            .type = P2P::GameType_Uninitialized
-                        }
-                    ));
-                }
+        ImGui::PushID(id.data());
+        ImGui::BeginDisabled(!mine);
+        bool checked = vote == game_type || (!mine && is_singleplayer());
+        std::string name = mine ? "Mine": "Other";
+        if (ImGui::Checkbox(name.data(), &checked)) {
+            vote = checked ? game_type : P2P::GameType_Uninitialized;
+            if (!is_singleplayer()) {
+                P2P::tcp_manager.outgoingQueue.push(P2P::Packet::create(
+                    P2P::GameVoteBody {
+                        .type = vote
+                    }
+                ));
             }
         }
         ImGui::EndDisabled();
@@ -99,28 +79,26 @@ namespace GameSelect {
 
         ImGui::Text("Role: %s", P2P::to_string(role_type).c_str());
         ImGui::Separator();
-        if (ImGui::BeginTable("GameSelectTable", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+        if (ImGui::BeginTable("GameSelectTable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
             ImGui::TableSetupColumn("Game");
-            ImGui::TableSetupColumn("Master Vote");
-            ImGui::TableSetupColumn("Client Vote");
+            ImGui::TableSetupColumn("Vote");
             ImGui::TableHeadersRow();
 
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::Text("Pong");
             ImGui::TableSetColumnIndex(1);
-            int id = 0;
-            draw_checkbox(role_type, true, P2P::GameType_Pong, id);
-            ImGui::TableSetColumnIndex(2);
-            draw_checkbox(role_type, false, P2P::GameType_Pong, id);
+            draw_checkbox("pong_mine", my_vote, P2P::GameType_Pong, true);
+            ImGui::SameLine();
+            draw_checkbox("pong_other", other_vote, P2P::GameType_Pong, false);
 
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             ImGui::Text("Shooter");
             ImGui::TableSetColumnIndex(1);
-            draw_checkbox(role_type, true, P2P::GameType_Shooter, id);
-            ImGui::TableSetColumnIndex(2);
-            draw_checkbox(role_type, false, P2P::GameType_Shooter, id);
+            draw_checkbox("shooter_other", my_vote, P2P::GameType_Shooter, true);
+            ImGui::SameLine();
+            draw_checkbox("shooter_other", other_vote, P2P::GameType_Shooter, false);
 
             ImGui::EndTable();
         }
@@ -128,7 +106,7 @@ namespace GameSelect {
             ImGui::Text("Game starting in %f", vote_confirm_countdown / 1000.0f);
         }
 
-        bool is_resolved = client_vote == master_vote && master_vote != P2P::GameType_Uninitialized;
+        bool is_resolved = my_vote != P2P::GameType_Uninitialized && (my_vote == other_vote || is_singleplayer());
         if (!is_resolved) {
             vote_confirm_countdown = -1;
         } else if (vote_confirm_countdown < 0) {
@@ -140,18 +118,9 @@ namespace GameSelect {
                 role_type == P2P::RoleType_Master || 
                 role_type == P2P::RoleType_SinglePlayer
             );
-            bool is_send = (
-                role_type == P2P::RoleType_Master
-            );
             if (is_master && vote_confirm_countdown <= 0) {
-                switch (master_vote) {
+                switch (my_vote) {
                 case P2P::GameType_Pong: {
-                    Pong::pong.reset();
-                    if (is_send) {
-                        P2P::tcp_manager.outgoingQueue.try_push(P2P::Packet::create(
-                            Pong::pong.pack()
-                        ));
-                    }
                     App::app.reset_to_state(App::AppState_Pong);
                     break;
                 }
