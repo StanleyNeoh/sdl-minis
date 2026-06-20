@@ -16,7 +16,7 @@ namespace Textures {
             width,
             height 
         );
-        u_int32_t pix[width][height] = {0};
+        u_int32_t pix[height][width] = {0};
         for (int i = 0; i < height; i++) {
             float g = 0.5 * width / height;
             float lo = 0.5 * width - g * i;
@@ -42,7 +42,37 @@ namespace Textures {
                 }
             }
         }
-        SDL_UpdateTexture(ship_tex, NULL, &pix, 100 * sizeof(u_int32_t));
+        SDL_UpdateTexture(ship_tex, NULL, &pix, width * sizeof(u_int32_t));
         return ship_tex;
     }
+
+    SDL_Texture* trail_fire_tex = nullptr;
+    SDL_Texture* Textures::get_trail_fire_tex() {
+        if (trail_fire_tex != nullptr) return trail_fire_tex;
+        constexpr int width = 20;
+        constexpr int height = 20;
+        trail_fire_tex = SDL_CreateTexture(
+            renderer, 
+            SDL_PIXELFORMAT_ARGB8888,
+            SDL_TEXTUREACCESS_STATIC,
+            width,
+            height 
+        );
+        u_int32_t pix[height][width] = {0};
+        for (int i = 0; i < height; i++) {
+            float g = 0.5 * width / height;
+            float lo = 0.5 * width - g * (height - i);
+            float hi = 0.5 * width + g * (height - i);
+            for (int j = 0; j < width; j++) {
+                if (j >= lo && j <= hi) {
+                    pix[i][j] = 0xFFFFAA00u;
+                } else {
+                    pix[i][j] = 0x00000000u;
+                }
+            }
+        }
+        SDL_UpdateTexture(trail_fire_tex, NULL, &pix, width * sizeof(u_int32_t));
+        return trail_fire_tex;
+    }
+
 }

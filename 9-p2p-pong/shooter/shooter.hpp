@@ -10,10 +10,52 @@
 
 namespace Shooter {
     struct Ship {
+        float trailfire_size = 20.0;
         Vec2 size{50.0, 50.0};
         Vec2 pos{500.0, 500.0};
         Vec2 vel{0.0, 0.0};
         float deg = 0;
+
+        Vec2 dir() {
+            float rad = deg * (M_PI / 180.0f);
+            return Vec2{sin(rad), -cos(rad)};
+        }
+
+        void render(SDL_Renderer* renderer, bool is_boosting) {
+            SDL_FRect dst{
+                pos.x - size.x / 2,
+                pos.y - size.y / 2,
+                size.x,
+                size.y
+            };
+            SDL_RenderCopyExF(
+                renderer,
+                Textures::textures.get_ship_tex(),
+                nullptr,
+                &dst,
+                deg,
+                nullptr,
+                SDL_FLIP_NONE
+            );
+            if (is_boosting) {
+                Vec2 _dir = dir();
+                SDL_FRect dst{
+                    pos.x - size.x * _dir.x - trailfire_size / 2,
+                    pos.y - size.y * _dir.y - trailfire_size / 2,
+                    trailfire_size,
+                    trailfire_size
+                };
+                SDL_RenderCopyExF(
+                    renderer,
+                    Textures::textures.get_trail_fire_tex(),
+                    nullptr,
+                    &dst,
+                    deg,
+                    nullptr,
+                    SDL_FLIP_NONE
+                );
+            }
+        }
     };
 
     struct Shooter {
@@ -34,11 +76,12 @@ namespace Shooter {
             Textures::textures.initialise(renderer);
         }
 
-        void step();
+        void step(bool& is_boosting);
 
         void draw() {
             if (tex == nullptr) return;
-            step();
+            bool is_boosting;
+            step(is_boosting);
 
             ImVec2 avail = ImGui::GetContentRegionAvail();
             float canvasSide = std::min(avail.x, avail.y);
@@ -49,22 +92,8 @@ namespace Shooter {
             SDL_SetRenderTarget(renderer, tex);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
             SDL_RenderClear(renderer);
-            
-            SDL_FRect dst{
-                ship1.pos.x - ship1.size.x / 2,
-                ship1.pos.y - ship1.size.y / 2,
-                ship1.size.x,
-                ship1.size.y
-            };
-            SDL_RenderCopyExF(
-                renderer,
-                Textures::textures.get_ship_tex(),
-                nullptr,
-                &dst,
-                ship1.deg,
-                nullptr,
-                SDL_FLIP_NONE
-            );
+            ship1.render(renderer, is_boosting);
+
             SDL_SetRenderTarget(renderer, nullptr);
 
             ImGui::Image(tex, canvasSize);

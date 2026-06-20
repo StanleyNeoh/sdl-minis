@@ -5,10 +5,11 @@
 namespace Shooter {
     Shooter shooter;
 
-    void Shooter::step() {
+    void Shooter::step(bool& is_boosting) {
+        is_boosting = false;
         float dt = App::app.frame_stopwatch.delta() / 1000.0f;
         float scale = 300.0 * dt;
-        float rad = ship1.deg * (M_PI / 180.0f);
+        Vec2 dir = ship1.dir();
         const Uint8* state = SDL_GetKeyboardState(NULL);
         if (state[SDL_SCANCODE_A]) {
             ship1.deg -= scale;
@@ -17,12 +18,9 @@ namespace Shooter {
             ship1.deg += scale;
         }
         if (state[SDL_SCANCODE_W]) {
-            ship1.vel.y += -cos(rad) * scale;
-            ship1.vel.x += sin(rad) * scale;
-        }
-        if (state[SDL_SCANCODE_S]) {
-            ship1.vel.y -= -cos(rad) * scale;
-            ship1.vel.x -= sin(rad) * scale;
+            ship1.vel.y += dir.y * scale;
+            ship1.vel.x += dir.x * scale;
+            is_boosting = true;
         }
         if (ship1.vel.l2() >= 300.0 * 300.0) {
             ship1.vel.normalise(300.0);
@@ -33,7 +31,6 @@ namespace Shooter {
         while (ship1.pos.x < 0) ship1.pos.x += width;
         while (ship1.pos.y < 0) ship1.pos.y += height;
         while (ship1.pos.x > width) ship1.pos.x -= width;
-        while (ship1.pos.y > height ) ship1.pos.y -= height;
-        std::cout << ship1.pos << ship1.vel << "\n";
+        while (ship1.pos.y > height) ship1.pos.y -= height;
     }
 }
