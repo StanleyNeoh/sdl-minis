@@ -4,45 +4,65 @@
 
 namespace Pong {
     Pong pong;
+    
+    bool is_singleplayer() {
+        return App::app.role_type == P2P::RoleType_SinglePlayer;
+    }
+
+    bool is_left() {
+        return (
+            App::app.role_type == P2P::RoleType_Master ||
+            App::app.role_type == P2P::RoleType_SinglePlayer
+        );
+    }
+
+    Paddle& my_paddle() {
+        return is_left() ? pong.leftP : pong.rightP;
+    }
+
+    Paddle& other_paddle() {
+        return !is_left() ? pong.leftP : pong.rightP;
+    }
 
     void Pong::process_setup() {
         paddle_update = false;
     }
 
     void Pong::process_sdl_event(const SDL_Event& event) {
-        bool is_master = App::app.role_type == P2P::RoleType_Master;
-        auto& paddle = is_master ? rightP : leftP;
-        auto& other_paddle = !is_master ? rightP : leftP;
         switch (event.type) {
             case SDL_KEYDOWN: {
                 auto key = event.key.keysym.sym;
                 switch (key) {
                     case SDLK_w:
-                        paddle.move(-20.0);
+                        my_paddle().move(-20.0);
                         paddle_update = true;
                         break;
                     case SDLK_s:
-                        paddle.move(20.0);
-                        paddle_update = true;
-                        break;
-                    case SDLK_UP:
-                        other_paddle.move(-20.0);
-                        paddle_update = true;
-                        break;
-                    case SDLK_DOWN:
-                        other_paddle.move(20.0);
+                        my_paddle().move(20.0);
                         paddle_update = true;
                         break;
                     case SDLK_SPACE:
-                        paddle.shoot(!is_master);
-                        paddle_update = true;
-                        break;
-                    case SDLK_RSHIFT:
-                        other_paddle.shoot(is_master);
+                        my_paddle().shoot(is_left());
                         paddle_update = true;
                         break;
                     default:
                         break;
+                }
+                if (is_singleplayer()) {
+                    switch(key) {
+                        case SDLK_UP:
+                            other_paddle().move(-20.0);
+                            paddle_update = true;
+                            break;
+                        case SDLK_DOWN:
+                            other_paddle().move(20.0);
+                            paddle_update = true;
+                            break;
+                        case SDLK_RSHIFT:
+                            other_paddle().shoot(!is_left());
+                            paddle_update = true;
+                            break;
+                    }
                 }
                 break;
             }
@@ -53,18 +73,22 @@ namespace Pong {
                     case SDLK_w:
                     case SDLK_s: {
                         if (state[SDL_SCANCODE_W] || state[SDL_SCANCODE_S]) break;
-                        paddle.move(0);
+                        my_paddle().move(0);
                         paddle_update = true;
                         break;
                     }
+                    default:
+                        break;
+                }
+                if (is_singleplayer()) {
+                    switch (key) {
                     case SDLK_UP:
                     case SDLK_DOWN:
                         if (state[SDL_SCANCODE_UP] || state[SDL_SCANCODE_DOWN]) break;
-                        other_paddle.move(0);
+                        other_paddle().move(0);
                         paddle_update = true;
                         break;
-                    default:
-                        break;
+                    }
                 }
                 break;
             }
@@ -80,8 +104,7 @@ namespace Pong {
                 App::app.reset_to_state(App::AppState_Pong);
             },
             [&](const P2P::PongPaddleBody& pong_paddle) {
-                auto& paddle = App::app.role_type == P2P::RoleType_Master ? leftP : rightP;
-                paddle.unpack(pong_paddle);
+                other_paddle().unpack(pong_paddle);
             },
             [&](const P2P::PongBallBody& pong_ball) {
                 ball.unpack(pong_ball);
@@ -94,12 +117,6 @@ namespace Pong {
     }
 
     void Pong::process_takedown() {
-        bool is_master = (
-            App::app.role_type == P2P::RoleType_Master ||
-            App::app.role_type == P2P::RoleType_SinglePlayer
-        );
-        bool is_singleplayer = App::app.role_type == P2P::RoleType_SinglePlayer;
-
         State state = step(App::app.frame_stopwatch.delta() / 1000.0f);
         switch (state) {
         case State_Right_Wins: {
@@ -120,14 +137,13 @@ namespace Pong {
             break;
         }
 
-        if (!is_singleplayer) {
+        if (!is_singleplayer()) {
             if (paddle_update) {
-                auto& paddle = is_master ? rightP : leftP;
                 P2P::tcp_manager.outgoingQueue.push(P2P::Packet::create(
-                    paddle.pack()
+                    my_paddle().pack()
                 ));
             }
-            if (is_master) {
+            if (is_left()) {
                 P2P::tcp_manager.outgoingQueue.push(P2P::Packet::create(
                     ball.pack()
                 ));

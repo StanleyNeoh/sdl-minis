@@ -92,6 +92,7 @@ namespace Pong {
                 proj_vy = proj_vy + _proj_ay * dt;
                 if (proj_vy < -Paddle::P_VY) proj_vy = -Paddle::P_VY;
                 else if (proj_vy > Paddle::P_VY) proj_vy = Paddle::P_VY;
+                else if (abs(proj_vy) < 1e-2) proj_vy = 0;
             }
             pos.y = pos.y + vy * dt;
             if (pos.y < 0) {
