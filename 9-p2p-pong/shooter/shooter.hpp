@@ -9,7 +9,6 @@
 #include "imgui.h"
 
 namespace Shooter {
-
     struct Projectile {
         SDL_Color color;
         Vec2 size{10.0, 10.0};
@@ -17,6 +16,10 @@ namespace Shooter {
         Vec2 vel{};
         int player_id = -1;
         float life = -1;
+
+        void reset() {
+            life = -1;
+        }
 
         void render(SDL_Renderer* renderer) {
             if (life <= 0) return;
@@ -53,6 +56,16 @@ namespace Shooter {
         Vec2 dir() {
             float rad = deg * (M_PI / 180.0f);
             return Vec2{sin(rad), -cos(rad)};
+        }
+
+        void reset() {
+            pos.x = 500.0;
+            pos.y = 500.0;
+            vel.x = 0.0;
+            vel.y = 0.0;
+            deg = 0;
+            last_shot_at = 0;
+            is_boosting = false;
         }
 
         void render(SDL_Renderer* renderer) {
@@ -93,6 +106,19 @@ namespace Shooter {
                 );
             }
         }
+
+        bool is_hit(Projectile& projectile) {
+            if (projectile.life <= 0) return false;
+            bool overlap_x = (
+                pos.x - size.x / 2 < projectile.pos.x &&
+                pos.x + size.x / 2 > projectile.pos.x
+            );
+            bool overlap_y = (
+                pos.y - size.y / 2 < projectile.pos.y &&
+                pos.y + size.y / 2 > projectile.pos.y
+            );
+            return overlap_x && overlap_y && projectile.player_id != player_id;
+        }
     };
 
     struct Shooter {
@@ -105,6 +131,8 @@ namespace Shooter {
         Ship ship2{2, {0, 255, 0}};
         size_t projectile_i = 0;
         std::array<Projectile, projectiles_size> projectiles;
+        int ship1_score = 0;
+        int ship2_score = 0;
 
         void initialise(SDL_Renderer* renderer) {
             if (tex != nullptr) return;
@@ -116,6 +144,16 @@ namespace Shooter {
                 height
             );
             Textures::textures.initialise(renderer);
+        }
+
+        void reset() {
+            ship1_score = 0;
+            ship2_score = 0;
+            ship1.reset();
+            ship2.reset();
+            for (int i = 0; i < projectiles_size; i++) {
+                projectiles[i].reset();
+            }
         }
 
         void shoot(Ship& ship) {

@@ -72,6 +72,7 @@ namespace App {
                 }
             } else if (_app_state == AppState_Shooter) {
                 app_state = AppState_Shooter;
+                Shooter::shooter.reset();
             }
         }
         

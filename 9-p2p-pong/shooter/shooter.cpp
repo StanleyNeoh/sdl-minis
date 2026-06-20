@@ -76,8 +76,25 @@ namespace Shooter {
         float dt = App::app.frame_stopwatch.delta() / 1000.0f;
         step_ship(ship1, dt, SDL_SCANCODE_W, SDL_SCANCODE_A, SDL_SCANCODE_D);
         step_ship(ship2, dt, SDL_SCANCODE_UP, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT);
+        bool ship1_hit = false;
+        bool ship2_hit = false;
         for (int i = 0; i < projectiles_size; i++) {
             step_projectile(projectiles[i], dt);
+            ship1_hit |= ship1.is_hit(projectiles[i]);
+            ship2_hit |= ship2.is_hit(projectiles[i]);
         }
+        if (ship1_hit && ship2_hit) {
+            Chat::chat.messages.push_back("Draw!");
+        } else if (ship1_hit) {
+            Chat::chat.messages.push_back("Ship 2 Won!");
+            ship2_score++;
+        } else if (ship2_hit) {
+            Chat::chat.messages.push_back("Ship 1 Won!");
+            ship1_score++;
+        } else {
+            return;
+        }
+        Chat::chat.messages.push_back("Score = " + std::to_string(ship1_score) + " : " + std::to_string(ship2_score));
+        App::app.reset_to_state(App::AppState_GameSelect);
     }
 }
