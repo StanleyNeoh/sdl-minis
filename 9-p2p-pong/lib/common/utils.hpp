@@ -46,10 +46,10 @@ struct Vec2 {
         return std::sqrt(l2());
     }
 
-    void normalise() {
+    void normalise(float new_l = 1.0) {
         float len = l();
-        x /= len;
-        y /= len;
+        x *= new_l / len;
+        y *= new_l / len;
     }
 
     Vec2 unit() const {

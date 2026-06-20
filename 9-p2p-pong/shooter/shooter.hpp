@@ -11,7 +11,7 @@
 namespace Shooter {
     struct Ship {
         Vec2 size{50.0, 50.0};
-        Vec2 pos{1000.0, 1000.0};
+        Vec2 pos{500.0, 500.0};
         Vec2 vel{0.0, 0.0};
         float deg = 0;
     };
@@ -34,11 +34,11 @@ namespace Shooter {
             Textures::textures.initialise(renderer);
         }
 
-        void process_takedown();
+        void step();
 
         void draw() {
             if (tex == nullptr) return;
-            process_takedown();
+            step();
 
             ImVec2 avail = ImGui::GetContentRegionAvail();
             float canvasSide = std::min(avail.x, avail.y);
