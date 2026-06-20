@@ -125,8 +125,7 @@ namespace Pong {
 
         void unpack(const P2P::PongPaddleBody& padbody) {
             pos.y = padbody.pos_y;
-            proj_ay = padbody.p_acc_y;
-            proj_vy = padbody.p_vel_y;
+            vy = padbody.vel_y;
             proj_ay = padbody.p_acc_y;
             proj_vy = padbody.p_vel_y;
             proj_i = padbody.proj_i;
