@@ -11,7 +11,8 @@
 namespace Shooter {
 
     struct Projectile {
-        Vec2 size{5.0, 5.0};
+        SDL_Color color;
+        Vec2 size{10.0, 10.0};
         Vec2 pos{};
         Vec2 vel{};
         int player_id = -1;
@@ -19,6 +20,8 @@ namespace Shooter {
 
         void render(SDL_Renderer* renderer) {
             if (life <= 0) return;
+            SDL_SetTextureColorMod(Textures::textures.get_circle_tex(), color.r, color.g, color.b);
+            SDL_SetTextureBlendMode(Textures::textures.get_circle_tex(), SDL_BLENDMODE_BLEND);
             SDL_FRect dest{
                 pos.x - size.x / 2,
                 pos.y - size.y / 2,
@@ -38,19 +41,24 @@ namespace Shooter {
     };
     struct Ship {
         int player_id;
+        SDL_Color color;
         float trailfire_size = 20.0;
         Vec2 size{50.0, 50.0};
         Vec2 pos{500.0, 500.0};
         Vec2 vel{0.0, 0.0};
         float deg = 0;
         Uint64 last_shot_at = 0;
+        bool is_boosting = false;
 
         Vec2 dir() {
             float rad = deg * (M_PI / 180.0f);
             return Vec2{sin(rad), -cos(rad)};
         }
 
-        void render(SDL_Renderer* renderer, bool is_boosting) {
+        void render(SDL_Renderer* renderer) {
+            SDL_SetTextureColorMod(Textures::textures.get_ship_tex(), color.r, color.g, color.b);
+            SDL_SetTextureBlendMode(Textures::textures.get_ship_tex(), SDL_BLENDMODE_BLEND);
+            std::cout << color.r << " " << color.g << " " << color.b << "\n";
             SDL_FRect dst{
                 pos.x - size.x / 2,
                 pos.y - size.y / 2,
@@ -88,12 +96,13 @@ namespace Shooter {
     };
 
     struct Shooter {
-        constexpr static int projectiles_size = 10;
+        constexpr static int projectiles_size = 25;
         SDL_Texture* tex = nullptr;
         float width = 1000.0f;
         float height = 1000.0f;
 
-        Ship ship1{1};
+        Ship ship1{1, {255, 0, 0}};
+        Ship ship2{2, {0, 255, 0}};
         size_t projectile_i = 0;
         std::array<Projectile, projectiles_size> projectiles;
 
@@ -109,14 +118,37 @@ namespace Shooter {
             Textures::textures.initialise(renderer);
         }
 
+        void shoot(Ship& ship) {
+            if (projectiles[projectile_i].life > 0) return;
+            Uint64 now = SDL_GetTicks64();
+            if (now - ship.last_shot_at < 100) return;
+            auto dir = ship.dir();
+            projectiles[projectile_i].color = ship.color;
+            projectiles[projectile_i].life = 1.0;
+            projectiles[projectile_i].pos.x = ship.pos.x + ship.size.x * dir.x;
+            projectiles[projectile_i].pos.y = ship.pos.y + ship.size.y * dir.y;
+            projectiles[projectile_i].vel.x = 1000.0 * dir.x;
+            projectiles[projectile_i].vel.y = 1000.0 * dir.y;
+            projectiles[projectile_i].player_id = ship.player_id;
+            ship.last_shot_at = now;
+            projectile_i = (projectile_i + 1) % projectiles_size;
+        }
+
         void process_sdl_event(const SDL_Event& event);
 
-        void step(bool& is_boosting);
+        void step_projectile(Projectile& projectile, float dt);
+        void step_ship(
+            Ship& ship, 
+            float dt,
+            SDL_Scancode up_code,
+            SDL_Scancode left_code,
+            SDL_Scancode right_code
+        );
+        void step();
 
         void draw() {
             if (tex == nullptr) return;
-            bool is_boosting;
-            step(is_boosting);
+            step();
 
             ImVec2 avail = ImGui::GetContentRegionAvail();
             float canvasSide = std::min(avail.x, avail.y);
@@ -127,7 +159,8 @@ namespace Shooter {
             SDL_SetRenderTarget(renderer, tex);
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
             SDL_RenderClear(renderer);
-            ship1.render(renderer, is_boosting);
+            ship1.render(renderer);
+            ship2.render(renderer);
             for (int i = 0; i < projectiles_size; i++) {
                 projectiles[i].render(renderer);
             }

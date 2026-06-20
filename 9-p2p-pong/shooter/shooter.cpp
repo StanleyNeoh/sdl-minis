@@ -10,18 +10,11 @@ namespace Shooter {
                 auto key = event.key.keysym.sym;
                 switch (key) {
                     case SDLK_SPACE: {
-                        if (projectiles[projectile_i].life > 0) break;
-                        Uint64 now = SDL_GetTicks64();
-                        if (now - ship1.last_shot_at < 100) break;
-                        auto dir = ship1.dir();
-                        projectiles[projectile_i].life = 5.0;
-                        projectiles[projectile_i].pos.x = ship1.pos.x + ship1.size.x * dir.x;
-                        projectiles[projectile_i].pos.y = ship1.pos.y + ship1.size.y * dir.y;
-                        projectiles[projectile_i].vel.x = 1000.0 * dir.x;
-                        projectiles[projectile_i].vel.y = 1000.0 * dir.y;
-                        projectiles[projectile_i].player_id = ship1.player_id;
-                        ship1.last_shot_at = now;
-                        projectile_i = (projectile_i + 1) % projectiles_size;
+                        shoot(ship1);
+                        break;
+                    }
+                    case SDLK_RSHIFT: {
+                        shoot(ship2);
                         break;
                     }
                     default:
@@ -34,44 +27,57 @@ namespace Shooter {
     }
 
 
-    void Shooter::step(bool& is_boosting) {
-        is_boosting = false;
-        float dt = App::app.frame_stopwatch.delta() / 1000.0f;
+    void Shooter::step_projectile(Projectile& projectile, float dt) {
+        if (projectile.life <= 0) return;
+        projectile.pos.x += projectile.vel.x * dt;
+        projectile.pos.y += projectile.vel.y * dt;
+        projectile.life -= dt;
+        while (projectile.pos.x < 0) projectile.pos.x += width;
+        while (projectile.pos.y < 0) projectile.pos.y += height;
+        while (projectile.pos.x > width) projectile.pos.x -= width;
+        while (projectile.pos.y > height) projectile.pos.y -= height;
+    }
+
+    void Shooter::step_ship(
+        Ship& ship, 
+        float dt, 
+        SDL_Scancode up_code,
+        SDL_Scancode left_code,
+        SDL_Scancode right_code
+    ) {
+        ship.is_boosting = false;
         float scale = 300.0 * dt;
-        Vec2 dir = ship1.dir();
+        Vec2 dir = ship.dir();
         const Uint8* state = SDL_GetKeyboardState(NULL);
-        if (state[SDL_SCANCODE_A]) {
-            ship1.deg -= scale;
+        if (state[left_code]) {
+            ship.deg -= scale;
         }
-        if (state[SDL_SCANCODE_D]) {
-            ship1.deg += scale;
+        if (state[right_code]) {
+            ship.deg += scale;
         }
-        if (state[SDL_SCANCODE_W]) {
-            ship1.vel.y += dir.y * scale;
-            ship1.vel.x += dir.x * scale;
-            is_boosting = true;
+        if (state[up_code]) {
+            ship.vel.y += dir.y * scale;
+            ship.vel.x += dir.x * scale;
+            ship.is_boosting = true;
         }
-        if (ship1.vel.l2() >= 300.0 * 300.0) {
-            ship1.vel.normalise(300.0);
+        if (ship.vel.l2() >= 300.0 * 300.0) {
+            ship.vel.normalise(300.0);
         }
-        ship1.pos.x += ship1.vel.x * dt;
-        ship1.pos.y += ship1.vel.y * dt;
+        ship.pos.x += ship.vel.x * dt;
+        ship.pos.y += ship.vel.y * dt;
 
-        while (ship1.pos.x < 0) ship1.pos.x += width;
-        while (ship1.pos.y < 0) ship1.pos.y += height;
-        while (ship1.pos.x > width) ship1.pos.x -= width;
-        while (ship1.pos.y > height) ship1.pos.y -= height;
+        while (ship.pos.x < 0) ship.pos.x += width;
+        while (ship.pos.y < 0) ship.pos.y += height;
+        while (ship.pos.x > width) ship.pos.x -= width;
+        while (ship.pos.y > height) ship.pos.y -= height;
+    }
 
+    void Shooter::step() {
+        float dt = App::app.frame_stopwatch.delta() / 1000.0f;
+        step_ship(ship1, dt, SDL_SCANCODE_W, SDL_SCANCODE_A, SDL_SCANCODE_D);
+        step_ship(ship2, dt, SDL_SCANCODE_UP, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT);
         for (int i = 0; i < projectiles_size; i++) {
-            Projectile& projectile = projectiles[i];
-            if (projectile.life <= 0) continue;
-            projectile.pos.x += projectile.vel.x * dt;
-            projectile.pos.y += projectile.vel.y * dt;
-            projectile.life -= dt;
-            while (projectile.pos.x < 0) projectile.pos.x += width;
-            while (projectile.pos.y < 0) projectile.pos.y += height;
-            while (projectile.pos.x > width) projectile.pos.x -= width;
-            while (projectile.pos.y > height) projectile.pos.y -= height;
+            step_projectile(projectiles[i], dt);
         }
     }
 }
