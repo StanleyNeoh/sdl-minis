@@ -88,6 +88,8 @@ namespace App {
                 Pong::pong.process_sdl_event(event);
             } else if (app_state == AppState_GameSelect) {
                 GameSelect::game_select.process_sdl_event(event);
+            } else if (app_state == AppState_Shooter) {
+                Shooter::shooter.process_sdl_event(event);
             }
         }
         

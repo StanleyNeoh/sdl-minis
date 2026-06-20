@@ -49,8 +49,8 @@ namespace Textures {
     SDL_Texture* trail_fire_tex = nullptr;
     SDL_Texture* Textures::get_trail_fire_tex() {
         if (trail_fire_tex != nullptr) return trail_fire_tex;
-        constexpr int width = 20;
-        constexpr int height = 20;
+        constexpr int width = 100;
+        constexpr int height = 100;
         trail_fire_tex = SDL_CreateTexture(
             renderer, 
             SDL_PIXELFORMAT_ARGB8888,
@@ -75,4 +75,36 @@ namespace Textures {
         return trail_fire_tex;
     }
 
+    SDL_Texture* circle_tex = nullptr;
+    SDL_Texture* Textures::get_circle_tex() {
+        if (circle_tex != nullptr) return circle_tex;
+        constexpr int width = 100;
+        constexpr int height = 100;
+        circle_tex = SDL_CreateTexture(
+            renderer, 
+            SDL_PIXELFORMAT_ARGB8888,
+            SDL_TEXTUREACCESS_STATIC,
+            width,
+            height 
+        );
+        u_int32_t pix[height][width] = {0};
+
+        float cy = height / 2.0f;
+        float cx = width / 2.0f;
+        for (int i = 0; i < height; i++) {
+            float dy = i - cy;
+            float dy2 = (dy * dy) / (cy * cy);
+            for (int j = 0; j < width; j++) {
+                float dx = j - cx;
+                float dx2 = (dx * dx) / (cx * cx);
+                if (dx2 + dy2 <= 1) {
+                    pix[i][j] = 0xFFFFFFFFu;
+                } else {
+                    pix[i][j] = 0x00000000u;
+                }
+            }
+        }
+        SDL_UpdateTexture(circle_tex, NULL, &pix, width * sizeof(u_int32_t));
+        return circle_tex;
+    }
 }

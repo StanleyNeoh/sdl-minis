@@ -15,6 +15,7 @@ namespace Textures {
 
         SDL_Texture* get_ship_tex();
         SDL_Texture* get_trail_fire_tex();
+        SDL_Texture* get_circle_tex();
     };
 
     extern Textures textures;
