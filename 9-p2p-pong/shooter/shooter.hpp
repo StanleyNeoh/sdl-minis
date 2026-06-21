@@ -71,7 +71,6 @@ namespace Shooter {
         void render(SDL_Renderer* renderer) {
             SDL_SetTextureColorMod(Textures::textures.get_ship_tex(), color.r, color.g, color.b);
             SDL_SetTextureBlendMode(Textures::textures.get_ship_tex(), SDL_BLENDMODE_BLEND);
-            std::cout << color.r << " " << color.g << " " << color.b << "\n";
             SDL_FRect dst{
                 pos.x - size.x / 2,
                 pos.y - size.y / 2,

@@ -4,6 +4,16 @@
 namespace Shooter {
     Shooter shooter;
 
+    namespace {
+        float clamp(float t, float a, float b) {
+            return t > b 
+                ? b 
+                : t < a
+                ? a
+                : t;
+        }
+    }
+
     void Shooter::process_sdl_event(const SDL_Event& event) {
         switch (event.type) {
             case SDL_KEYDOWN: {
@@ -45,26 +55,34 @@ namespace Shooter {
         SDL_Scancode left_code,
         SDL_Scancode right_code
     ) {
+        constexpr int turn_scale = 500;
+        constexpr int accel_scale = 500;
+        constexpr int drag_max = 100;
+        constexpr int vel_max = 300;
+
         ship.is_boosting = false;
-        float scale = 300.0 * dt;
         Vec2 dir = ship.dir();
         const Uint8* state = SDL_GetKeyboardState(NULL);
         if (state[left_code]) {
-            ship.deg -= scale;
+            ship.deg -= turn_scale * dt;
         }
         if (state[right_code]) {
-            ship.deg += scale;
+            ship.deg += turn_scale * dt;
         }
         if (state[up_code]) {
-            ship.vel.y += dir.y * scale;
-            ship.vel.x += dir.x * scale;
+            ship.vel.y += dir.y * dt * accel_scale;
+            ship.vel.x += dir.x * dt * accel_scale;
             ship.is_boosting = true;
         }
-        if (ship.vel.l2() >= 300.0 * 300.0) {
-            ship.vel.normalise(300.0);
+        if (ship.vel.l2() >= vel_max * vel_max) {
+            ship.vel.normalise(vel_max);
         }
         ship.pos.x += ship.vel.x * dt;
         ship.pos.y += ship.vel.y * dt;
+        if (!ship.is_boosting) {
+            ship.vel.x -= clamp(ship.vel.x, -drag_max, drag_max) * dt;
+            ship.vel.y -= clamp(ship.vel.y, -drag_max, drag_max) * dt;
+        }
 
         while (ship.pos.x < 0) ship.pos.x += width;
         while (ship.pos.y < 0) ship.pos.y += height;
