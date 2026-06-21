@@ -15,10 +15,19 @@ namespace Shooter {
         Vec2 pos{};
         Vec2 vel{};
         int player_id = -1;
+        int dmg = 10;
         float life = -1;
 
         void reset() {
             life = -1;
+        }
+
+        bool step(float dt) {
+            if (life <= 0) return false;
+            pos.x += vel.x * dt;
+            pos.y += vel.y * dt;
+            life -= dt;
+            return true;
         }
 
         void render(SDL_Renderer* renderer) {
@@ -43,14 +52,20 @@ namespace Shooter {
         }
     };
     struct Ship {
+        constexpr static int max_health = 100;
+        constexpr static float trailfire_size = 20.0;
+        constexpr static float shot_cooldown = 100;
+        constexpr static float regen_time = 5000;
+
         int player_id;
         SDL_Color color;
-        float trailfire_size = 20.0;
+        int health = max_health;
         Vec2 size{50.0, 50.0};
         Vec2 pos{500.0, 500.0};
         Vec2 vel{0.0, 0.0};
         float deg = 0;
         Uint64 last_shot_at = 0;
+        Uint64 last_hit_at = 0;
         bool is_boosting = false;
 
         Vec2 dir() {
@@ -59,6 +74,7 @@ namespace Shooter {
         }
 
         void reset() {
+            health = max_health;
             pos.x = 500.0;
             pos.y = 500.0;
             vel.x = 0.0;
@@ -66,6 +82,42 @@ namespace Shooter {
             deg = 0;
             last_shot_at = 0;
             is_boosting = false;
+        }
+
+        void step(
+            float dt,
+            SDL_Scancode up_code,
+            SDL_Scancode left_code,
+            SDL_Scancode right_code
+        ) {
+            constexpr int turn_scale = 500;
+            constexpr int accel_scale = 500;
+            constexpr int drag_max = 100;
+            constexpr int vel_max = 300;
+
+            is_boosting = false;
+            Vec2 _dir = dir();
+            const Uint8* state = SDL_GetKeyboardState(NULL);
+            if (state[left_code]) {
+                deg -= turn_scale * dt;
+            }
+            if (state[right_code]) {
+                deg += turn_scale * dt;
+            }
+            if (state[up_code]) {
+                vel.y += _dir.y * dt * accel_scale;
+                vel.x += _dir.x * dt * accel_scale;
+                is_boosting = true;
+            }
+            if (vel.l2() >= vel_max * vel_max) {
+                vel.normalise(vel_max);
+            }
+            pos.x += vel.x * dt;
+            pos.y += vel.y * dt;
+            if (!is_boosting) {
+                vel.x -= clamp<float>(vel.x, -drag_max, drag_max) * dt;
+                vel.y -= clamp<float>(vel.y, -drag_max, drag_max) * dt;
+            }
         }
 
         void render(SDL_Renderer* renderer) {
@@ -106,7 +158,7 @@ namespace Shooter {
             }
         }
 
-        bool is_hit(Projectile& projectile) {
+        bool is_shot_down(Projectile& projectile) {
             if (projectile.life <= 0) return false;
             bool overlap_x = (
                 pos.x - size.x / 2 < projectile.pos.x &&
@@ -116,7 +168,12 @@ namespace Shooter {
                 pos.y - size.y / 2 < projectile.pos.y &&
                 pos.y + size.y / 2 > projectile.pos.y
             );
-            return overlap_x && overlap_y && projectile.player_id != player_id;
+            if (overlap_x && overlap_y && projectile.player_id != player_id) {
+                projectile.life = -1;
+                health -= projectile.dmg;
+                last_hit_at = SDL_GetTicks64();
+            }
+            return health <= 0;
         }
     };
 
@@ -158,7 +215,7 @@ namespace Shooter {
         void shoot(Ship& ship) {
             if (projectiles[projectile_i].life > 0) return;
             Uint64 now = SDL_GetTicks64();
-            if (now - ship.last_shot_at < 100) return;
+            if (now - ship.last_shot_at < Ship::shot_cooldown) return;
             auto dir = ship.dir();
             projectiles[projectile_i].color = ship.color;
             projectiles[projectile_i].life = 1.0;

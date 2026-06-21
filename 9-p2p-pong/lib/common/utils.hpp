@@ -13,6 +13,14 @@ inline std::time_t curr_time() {
     return Clock::to_time_t(Clock::now());
 }
 
+template <typename T>
+inline float clamp(T t, T a, T b) {
+    return t > b 
+        ? b 
+        : t < a
+        ? a
+        : t;
+}
 struct Backoff {
     size_t spinCount = 0;
 
