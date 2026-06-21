@@ -15,18 +15,29 @@ namespace GameSelect {
     }
 
     void GameSelect::process_sdl_event(const SDL_Event& event) {
+        const Uint8* state = SDL_GetKeyboardState(NULL);
         switch (event.type) {
             case SDL_KEYDOWN: {
                 auto key = event.key.keysym.sym;
                 switch (key) {
-                    case SDLK_SPACE: {
-                        App::app.reset_to_state(App::AppState_Pong);
+                    case SDLK_1: {
+                        if (state[SDL_SCANCODE_G]) {
+                            Pong::pong.leftScore = 0;
+                            Pong::pong.rightScore = 0;
+                            Chat::chat.messages.push_back("Pong score resetted!");
+                        } else {
+                            App::app.reset_to_state(App::AppState_Pong);
+                        }
                         break;
                     }
-                    case SDLK_g: {
-                        Pong::pong.leftScore = 0;
-                        Pong::pong.rightScore = 0;
-                        Chat::chat.messages.push_back("Score resetted!");
+                    case SDLK_2: {
+                        if (state[SDL_SCANCODE_G]) {
+                            Shooter::shooter.ship1_score = 0;
+                            Shooter::shooter.ship2_score = 0;
+                            Chat::chat.messages.push_back("Shooter score resetted!");
+                        } else {
+                            App::app.reset_to_state(App::AppState_Shooter);
+                        }
                         break;
                     }
                 }
