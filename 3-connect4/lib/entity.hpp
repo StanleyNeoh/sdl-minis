@@ -10,6 +10,7 @@
 #include "utils.hpp"
 #include "engine.hpp"
 #include "atomic"
+#include "textures/textures.hpp"
 
 template <typename T>
 struct Entity {
@@ -165,151 +166,49 @@ struct Entity {
     void handle_game_end(const GameEnd&) {}
 };
 
-template <int M, int N>
-struct BoardFrame: public Entity<BoardFrame<M, N>> {
-    using Par = Entity<BoardFrame<M, N>>;
-    using Par::rect;
-    using Par::tex;
-    using Par::format;
-    using Par::draw_tex;
-    using Par::init_tex;
-    static constexpr Color BACKGROUND{0, 0, 100};
-
-    int br = 20;
-    int bw = -1;
-    int bh = -1;
-    float cw = -1;
-    float cwr = -1;
-    float ch = -1;
-    float chr = -1;
-
-    BoardFrame(int br): br(br) {}
-    BoardFrame() = default;
-
-    bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
-        if (!Par::init(renderer, x, y, w, h)) return false;
-        if (!init_tex()) return false;
-        uint32_t* pixels;
-        int pitch;
-        if (SDL_LockTexture(tex, NULL, reinterpret_cast<void**>(&pixels), &pitch) != 0) {
-            return false;
-        }
-
-        bw = rect.w - 2 * br;
-        bh = rect.h - 2 * br;
-        cw = static_cast<float>(bw) / N;
-        cwr = cw / 2.0;
-        ch = static_cast<float>(bh) / M;
-        chr = ch / 2.0;
-        uint32_t bgColor = map_color(format, BACKGROUND);
-
-        for (int r = 0; r < br; r++) {
-            int dy = br - r;
-            int dx = br - SDL_sqrt(br * br - dy * dy);
-            uint32_t* toppad = unsafe_shift(pixels, r * pitch);
-            uint32_t* botpad = unsafe_shift(pixels, (rect.h - 1 - r) * pitch);
-            for (int c = dx; c < rect.w - dx; c++) {
-                botpad[c] = toppad[c] = bgColor;
-            }
-        }
-        for (int r = br; r < rect.h - br; r++) {
-            uint32_t* rowpix = unsafe_shift(pixels, r * pitch);
-            for (int c = 0; c < br; c++) {
-                rowpix[c] = bgColor;
-            }
-            for (int c = rect.w - br; c < rect.w; c++) {
-                rowpix[c] = bgColor;
-            }
-        }
-
-        for (int r = 0; r < M; r++) {
-            for (int c = 0; c < N; c++) {
-                float tlx = cw * c + br;
-                float tly = ch * r + br;
-                float cx = tlx + cwr;
-                float cy = tly + chr;
-                for (int y = tly; y < tly + ch; y++) {
-                    uint32_t* rowpix = unsafe_shift(pixels, y * pitch);
-                    for (int x = tlx; x < tlx + cw; x++) {
-                        float dx = (x - cx) / cwr;
-                        float dy = (y - cy) / chr;
-                        float d2 = dx * dx + dy * dy;
-                        if (d2 > 0.8) {
-                            rowpix[x] = bgColor;
-                        } 
-                    }
-                }
-            }
-        }
-        SDL_UnlockTexture(tex);
-        return true;
-    }
-};
-
-struct BoardCell: public Entity<BoardCell> {
-    using Par = Entity<BoardCell>;
-    using Par::tex;
-    using Par::format;
-    using Par::rect;
-    using Par::init_tex;
-
+struct BoardCell {
     static constexpr Color RED{255, 0, 0};
     static constexpr Color BLUE{0, 0, 255};
     static constexpr Color HIGHLIGHT{0, 255, 0};
 
     Cell key = NoneKey;
+    SDL_Rect rect;
     int final_y = 0;
+    bool is_marked = false;
 
     BoardCell() = default;
-    BoardCell(Cell key, int final_y): key(key), final_y(final_y) {}
-
-    bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
-        if (!Par::init(renderer, x, y, w, h)) return false;
-        if (!init_tex()) return false;
-        if (!update_tex()) return false;
-        return true;
-    }
-
-    bool update_tex(bool marked=false) {
-        uint32_t* pixels;
-        int pitch;
-        if (SDL_LockTexture(tex, NULL, reinterpret_cast<void**>(&pixels), &pitch) != 0) {
-            return false;
-        }
-        float cwr = rect.w / 2.0;
-        float chr = rect.h / 2.0;
-        uint32_t hl_color = map_color(format, HIGHLIGHT);
-        uint32_t cell_color;
-        switch(key) {
-        case BotKey:
-            cell_color = map_color(format, {0,0,255});
-            break;
-        case PlayerKey:
-            cell_color = map_color(format, {255,0,0});
-            break;
-        default:
-            return true;
-        }
-        for (int r = 0; r < rect.h; r++) {
-            uint32_t* rowpix = unsafe_shift(pixels, r * pitch);
-            for (int c = 0; c < rect.w; c++) {
-                float dy = (r - chr) / chr;
-                float dx = (c - cwr) / cwr;
-                float d2 = dx * dx + dy * dy;
-                if (marked && d2 < 0.05) {
-                    rowpix[c] = hl_color;
-                } else if (d2 <= 1.0) {
-                    rowpix[c] = cell_color;
-                }
-            }
-        }
-        SDL_UnlockTexture(tex);
-        return true;
-    }
+    BoardCell(Cell key, const SDL_Rect& _rect): key(key), rect(_rect.x, 0, _rect.w, _rect.h), final_y(_rect.y) {}
 
     bool step() {
         if (rect.y == final_y) return false;
         rect.y = std::min(final_y, rect.y + 10);
+        return true;
+    }
+
+    bool draw(SDL_Renderer* renderer) {
+        switch (key) {
+        case BotKey:
+            SDL_SetTextureColorMod(Textures::BoardCell::tex, BLUE.r, BLUE.g, BLUE.b);
+            break;
+        case PlayerKey:
+            SDL_SetTextureColorMod(Textures::BoardCell::tex, RED.r, RED.g, RED.b);
+            break;
+        default:
+            break;
+        }
+        SDL_RenderCopy(renderer, Textures::BoardCell::tex, NULL, &rect);
+
+        if (is_marked) {
+            SDL_SetTextureColorMod(Textures::BoardCell::tex, HIGHLIGHT.r, HIGHLIGHT.g, HIGHLIGHT.b);
+            int cx = rect.x + 0.5 * rect.w;
+            int cy = rect.y + 0.5 * rect.h;
+            int nw = rect.w / 5.0;
+            int nh = rect.w / 5.0;
+            SDL_Rect _rect{cx - nw / 2, cy - nh / 2, nw, nh};
+            SDL_RenderCopy(renderer, Textures::BoardCell::tex, NULL, &_rect);
+        }
+
+        SDL_SetTextureColorMod(Textures::BoardCell::tex, 255, 255, 255);
         return true;
     }
 };
@@ -324,7 +223,6 @@ struct Board: public Entity<Board<M, N>> {
     using Par::net;
     
     std::unordered_map<GridLoc, BoardCell> cells;
-    BoardFrame<M, N> boardframe;
 
     Board(Network& net): Par(net) {};
 
@@ -333,21 +231,23 @@ struct Board: public Entity<Board<M, N>> {
 
     bool init(SDL_Renderer* renderer, int x, int y, int w, int h) {
         if (!Par::init(renderer, x, y, w, h)) return false;
-        if (!boardframe.init(renderer, x, y, w, h)) return false;
+        Textures::BoardCell::init(renderer);
+        Textures::BoardFrame::init(renderer);
         return true;
     }
 
     bool draw() {
         for (auto& cell: cells) {;
-            if (!cell.second.draw()) return false;
+            if (!cell.second.draw(renderer)) return false;
             cell.second.step();
         }
-        return boardframe.draw();
+        SDL_RenderCopy(renderer, Textures::BoardFrame::tex, NULL, &rect);
+        return true;
     }
 
     void handle_mouse_motion(const SDL_MouseMotionEvent& e) {
-        int cw = (rect.w - 2 * boardframe.br) / N;
-        int ind =  (e.x - boardframe.br) / cw; 
+        int cw = (rect.w - 2 * Textures::BoardFrame::br) / N;
+        int ind =  (e.x - Textures::BoardFrame::br) / cw; 
         if (ind < 0 || ind >= N) {
             col_i = -1;
         } else {
@@ -365,20 +265,18 @@ struct Board: public Entity<Board<M, N>> {
     }
 
     void handle_move(const Move& move) {
-        int r = move.r;
-        int c = move.c;
-        float cw = boardframe.cw;
-        float ch = boardframe.ch;
-        float tlx = cw * c + boardframe.br;
-        float tly = ch * r + boardframe.br;
-        cells[{r, c}] = BoardCell(move.key, tly);
-        cells[{r, c}].init(renderer, tlx, 0, cw, ch);
+        int x = Textures::BoardFrame::cw * move.c + Textures::BoardFrame::br + Textures::BoardFrame::cbr;
+        int y = Textures::BoardFrame::ch * move.r + Textures::BoardFrame::br + Textures::BoardFrame::cbr;
+        int w = Textures::BoardFrame::cw - 2 * Textures::BoardFrame::cbr;
+        int h = Textures::BoardFrame::ch - 2 * Textures::BoardFrame::cbr;
+        SDL_Rect screen_rect = Textures::BoardFrame::to_screen_rect(rect, {x, y, w, h});
+        cells[{move.r, move.c}] = BoardCell(move.key, screen_rect);
     }
 
     void handle_game_end(const GameEnd& game_end) {
         winner = game_end.winner;
         for (auto& loc: game_end.marked) {
-            cells[loc].update_tex(true);
+            cells[loc].is_marked = true;
         }
     }
 };
