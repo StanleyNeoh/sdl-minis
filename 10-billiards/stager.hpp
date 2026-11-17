@@ -5,6 +5,7 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
 #include "apps/demo.hpp"
+#include "apps/connect4/connect4.hpp"
 #include "context.hpp"
 #include <SDL.h>
 #include <tuple>
@@ -54,7 +55,7 @@ namespace {
 struct Stager {
     bool done = false;
     int selectIndex = -1;
-    std::tuple<Apps::Demo> apps;
+    std::tuple<Apps::Demo, Apps::Connect4> apps;
 
     void run() {
         using Context::renderer;
