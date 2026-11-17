@@ -1,14 +1,13 @@
 #include "context.hpp"
-#include "apps/stager.hpp"
-
-#include "SDL.h"
+#include "stager.hpp"
 
 // Main code
 int main(int, char**)
 {
     Context::init();
-    Apps::Stager::run();
+    Stager stager;
+    stager.run();
 
-    Context::destroy();
+    Context::deinit();
     return 0;
 }

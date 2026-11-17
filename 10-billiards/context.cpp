@@ -96,7 +96,7 @@ namespace Context {
         //IM_ASSERT(font != nullptr);
     }
 
-    void destroy() {
+    void deinit() {
         // Cleanup
         ImGui_ImplSDLRenderer2_Shutdown();
         ImGui_ImplSDL2_Shutdown();

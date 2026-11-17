@@ -13,7 +13,7 @@ namespace Context {
     extern const ImVec4 clear_color;
 
     void init();
-    void destroy();
+    void deinit();
 }
 
 #endif
