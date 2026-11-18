@@ -32,7 +32,7 @@ int Board::remPiece(int col) {
     return r;
 }
 
-Color Board::checkWin(bool marked[M][N]) const {
+Color Board::checkWin(BoardLoc* marked) const {
     auto check_loop = [](Color p, Color& pp, int& pc) {
         if (p == pp) {
             pc++;
@@ -53,8 +53,9 @@ Color Board::checkWin(bool marked[M][N]) const {
         for (int c = 0; c < N; c++) {
             if (check_loop(board[r][c], pp, pc)) {
                 if (marked != nullptr) {
+                    int _i = 0;
                     for (int _c = c - 3; _c <= c; _c++) {
-                        marked[r][_c] = true;
+                        marked[_i++] = {r, _c};
                     }
                 }
                 return pp;
@@ -69,8 +70,9 @@ Color Board::checkWin(bool marked[M][N]) const {
         for (int r = 0; r < M; r++) {
             if (check_loop(board[r][c], pp, pc)) {
                 if (marked != nullptr) {
+                    int _i = 0;
                     for (int _r = r - 3; _r <= r; _r++) {
-                        marked[_r][c] = true;
+                        marked[_i++] = {_r, c};
                     }
                 }
                 return pp;
@@ -88,8 +90,9 @@ Color Board::checkWin(bool marked[M][N]) const {
             int c = r - i;
             if (check_loop(board[r][c], pp, pc)) {
                 if (marked != nullptr) {
+                    int _i = 0;
                     for (int _r = r - 3; _r <= r; _r++) {
-                        marked[_r][_r - i] = true;
+                        marked[_i++] = {_r, _r - i};
                     }
                 }
                 return pp;
@@ -107,8 +110,9 @@ Color Board::checkWin(bool marked[M][N]) const {
             int c = i - r;
             if (check_loop(board[r][c], pp, pc)) {
                 if (marked != nullptr) {
+                    int _i = 0;
                     for (int _r = r - 3; _r <= r; _r++) {
-                        marked[_r][i - _r] = true;
+                        marked[_i++] = {_r, i - _r};
                     }
                 }
                 return pp;

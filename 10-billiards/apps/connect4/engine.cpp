@@ -1,6 +1,7 @@
 #include "engine.hpp"
 #include "board.hpp"
 #include <iostream>
+#include <thread>
 
 #define BIG 1000000
 
@@ -84,11 +85,71 @@ namespace {
     }
 }
 
-Action search_move(Board board, Color turn, int depth) {
+Action Engine::searchMove(Board& board, Color turn, int depth) {
     Action action;
     search_AB(board, turn, &action, depth);
     return action;
 }
 
+void Engine::threadLoop(Board* board, ResPipe* resPipe, ReqPipe* reqPipe) {
+    bool done = false;
+    while (!done) {
+        EngineData req;
+        while (reqPipe->pop(req)) {
+            switch (req.type) {
+                case TypeMove: {
+                    int col = req.data.move.col;
+                    Color turn = req.data.move.turn;
+                    int r = board->addPiece(col, turn);
+                    req.data.move.res.r = r;
+                    resPipe->block_push(req);
+                }
+                    break;
+                case TypeSearch: {
+                    Color turn = req.data.search.turn;
+                    int depth = req.data.search.depth;
+                    Action action = searchMove(*board, turn, depth);
+                    req.data.search.res.action = action;
+                    resPipe->block_push(req);
+                }
+                    break;
+                case TypeKill: {
+                    done = true;
+                }
+                    break;
+                default:
+                    break;
+            }
+
+            if (req.type == TypeMove) {
+                EngineData winres;
+                Color color = board->checkWin(winres.data.win.res.marked);
+                if (color != Color_None) {
+                    winres.type = TypeWin;
+                    winres.data.win.res.color = color;
+                    resPipe->block_push(winres);
+                }
+            }
+        }
+    }
+}
+
+void Engine::startThread() {
+    _thread = std::thread(threadLoop, &board, &resPipe, &reqPipe);
+}
+
+void Engine::stopThread() {
+    EngineData req = {
+        .type = TypeKill
+    };
+    reqPipe.block_push(req);
+    _thread.join();
+}
+
+void Engine::clear() {
+    board.clear();
+    reqPipe.clear();
+    resPipe.clear();
+}
 
 }}

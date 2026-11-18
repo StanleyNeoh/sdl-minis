@@ -19,6 +19,10 @@ namespace _Connect4 {
 
     Color switchTurn(Color turn);
 
+    struct BoardLoc {
+        int r; int c;
+    };
+
     struct Board {
         Color board[M][N] {};
         int next[N] {};
@@ -26,7 +30,7 @@ namespace _Connect4 {
         int addPiece(int col, Color color);
         int remPiece(int col);
 
-        Color checkWin(bool marked[M][N] = nullptr) const;
+        Color checkWin(BoardLoc* marked = nullptr) const;
         void clear();
     };
 }}

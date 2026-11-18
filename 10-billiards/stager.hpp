@@ -125,6 +125,7 @@ struct Stager {
             ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), renderer);
             SDL_RenderPresent(renderer);
         }
+        _Meta<decltype(apps)>::reinit(apps, selectIndex, -1);
     }
 };
 
