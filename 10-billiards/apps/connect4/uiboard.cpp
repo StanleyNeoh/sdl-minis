@@ -5,6 +5,7 @@ namespace Apps {
 namespace _Connect4 {
 
 int UiBoard::addPiece(int col, Color color) {
+    if (winner != Color_None) return -1;
     int r = board.addPiece(col, color);
     if (r < 0) return r;
     UiPiece& p = pieces[pieces_l++];
@@ -16,9 +17,16 @@ int UiBoard::addPiece(int col, Color color) {
     return r;
 }
 
+bool UiBoard::checkWin() {
+    winner = board.checkWin(marked);
+    return winner != Color_None;
+}
+
+
 void UiBoard::clear() {
+    board.clear();
     pieces_l = 0;
-    std::memset(&board, 0, sizeof(board));
+    winner = Color_None;
     std::memset(&marked, 0, sizeof(marked));
 }
 

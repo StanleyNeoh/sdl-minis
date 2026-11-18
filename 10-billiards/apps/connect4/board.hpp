@@ -26,7 +26,8 @@ namespace _Connect4 {
         int addPiece(int col, Color color);
         int remPiece(int col);
 
-        Color checkWin(bool** marked = nullptr) const;
+        Color checkWin(bool marked[M][N] = nullptr) const;
+        void clear();
     };
 }}
 

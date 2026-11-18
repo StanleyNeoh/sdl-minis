@@ -54,7 +54,7 @@ namespace _Connect4 {
                 auto& p = board.pieces[i];
                 if (p.color == Color_None) continue;
                 if (p.fr > p.r) {
-                    p.fr = std::max<float>(p.r, p.fr - (static_cast<float>(dt) / 300.0f));
+                    p.fr = std::max<float>(p.r, p.fr - (static_cast<float>(dt) / 100.0f));
                 }
 
                 ImU32 _color = p.color == Color_Blue ? IM_COL32(0, 0, 255, 255) : IM_COL32(255, 0, 0, 255);
@@ -68,6 +68,15 @@ namespace _Connect4 {
                     Utils::scale1(BoardFrame::ccr, BoardFrame::W, region.x),
                     _color
                 );
+
+                if (board.marked[p.r][p.c]) {
+                    constexpr ImU32 mark_color = IM_COL32(255, 255, 0, 255);
+                    drawList->AddCircleFilled(
+                        ImVec2(gx, gy), 
+                        10,
+                        mark_color
+                    );
+                }
             }
         }
 
@@ -83,6 +92,7 @@ namespace _Connect4 {
                 board.addPiece(col, turn);
                 turn = switchTurn(turn);
             }
+            board.checkWin();
         }
 
         void draw(Uint64 dt) {

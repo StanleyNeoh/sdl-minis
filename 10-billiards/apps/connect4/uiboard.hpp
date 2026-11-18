@@ -15,15 +15,14 @@ struct UiPiece {
 };
 
 struct UiBoard {
+    Board board;
     int pieces_l = 0;
     std::array<UiPiece, M * N> pieces;
-
-    Board board;
-
-    Color winner;
+    Color winner = Color_None;
     bool marked[M][N] {};
 
     int addPiece(int col, Color color);
+    bool checkWin();
     void clear();
 };
 

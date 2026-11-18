@@ -32,7 +32,7 @@ int Board::remPiece(int col) {
     return r;
 }
 
-Color Board::checkWin(bool** marked) const {
+Color Board::checkWin(bool marked[M][N]) const {
     auto check_loop = [](Color p, Color& pp, int& pc) {
         if (p == pp) {
             pc++;
@@ -116,6 +116,11 @@ Color Board::checkWin(bool** marked) const {
         }
     }
     return Color_None;
+}
+
+void Board::clear() {
+    std::memset(board, 0, sizeof(board));
+    std::memset(next, 0, sizeof(next));
 }
 
 }}
