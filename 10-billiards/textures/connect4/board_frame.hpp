@@ -15,18 +15,18 @@ struct BoardFrame {
     static constexpr int M = 6;
     static constexpr int N = 7;
 
-    static constexpr int W = 1000;
-    static constexpr int H = 1000;
+    static constexpr int cp = 2;
+    static constexpr int cd = 200;
+    static constexpr int cr = cd / 2;
+    static constexpr int ccr = cr - cp;
+
+    static constexpr int innerW = cd * N;
+    static constexpr int innerH = cd * M;
 
     static constexpr int br = 20;
-    static constexpr int bw = W - 2 * br;
-    static constexpr int bh = H - 2 * br;
-
-    static constexpr int cbr = 2;
-    static constexpr int cw = static_cast<float>(bw) / N;
-    static constexpr int cwr = cw / 2.0;
-    static constexpr int ch = static_cast<float>(bh) / M;
-    static constexpr int chr = ch / 2.0;
+    static constexpr int W = innerW + 2 * br;
+    static constexpr int H = innerH + 2 * br;
+    static constexpr float aspect_ratio = static_cast<float>(W) / (H);
 
     static constexpr u_int32_t BG_COLOR = 0xFFFFFFFF;
 
@@ -56,16 +56,17 @@ struct BoardFrame {
 
         for (int r = 0; r < M; r++) {
             for (int c = 0; c < N; c++) {
-                float tlx = cw * c + br;
-                float tly = ch * r + br;
-                float cx = tlx + cwr;
-                float cy = tly + chr;
-                for (int y = tly; y < tly + ch; y++) {
-                    for (int x = tlx; x < tlx + cw; x++) {
-                        float dx = (x - cx) / (cwr - 2 * cbr);
-                        float dy = (y - cy) / (chr - 2 * cbr);
+                float tlx = cd * c + br;
+                float tly = cd * r + br;
+                float cx = tlx + cr;
+                float cy = tly + cr;
+                for (int y = tly; y < tly + cd; y++) {
+                    for (int x = tlx; x < tlx + cd; x++) {
+                        float dx = x - cx;
+                        float dy = y - cy;
                         float d2 = dx * dx + dy * dy;
-                        if (d2 > 1.0) {
+                        constexpr float thresh = cr - cp;
+                        if (d2 > thresh * thresh) {
                             pix[y][x] = BG_COLOR;
                         } 
                     }

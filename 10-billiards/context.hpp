@@ -10,7 +10,7 @@ namespace Context {
     extern SDL_Window* window;
     extern SDL_Renderer* renderer;
     extern ImGuiIO* io;
-    extern const ImVec4 clear_color;
+    extern const ImVec4 clearColor;
 
     void init();
     void deinit();
