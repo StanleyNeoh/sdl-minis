@@ -5,8 +5,7 @@
 namespace Apps {
 namespace _Connect4 {
 
-void UiBoard::addPiece(const Engine& engine, int col, Color turn) {
-    if (lockUi) return;
+bool UiBoard::reqAddPiece(const Engine& engine, int col, Color turn) {
     EngineData req {
         .type = TypeMove,
         .data = { .move = {
@@ -15,40 +14,27 @@ void UiBoard::addPiece(const Engine& engine, int col, Color turn) {
         }}
     };
     engine.reqPipe.push(req);
-    lockUi = true;
+    return true;
 }
 
+void UiBoard::addPiece(int col, Color color, int r) {
+    if (r < 0) return;
+    UiPiece& p = pieces[pieces_l++];
+    p.color = color;
+    p.r = r;
+    p.c = col;
+    p.fr = M;
+    p.marked = false;
+}
 
-void UiBoard::handleEngineData(const EngineData& res) {
-    switch (res.type) {
-    case TypeMove: {
-        int r = res.data.move.res.r;
-        lockUi = false;
-        if (r < 0) return;
-        UiPiece& p = pieces[pieces_l++];
-        p.color = res.data.move.turn;
-        p.r = r;
-        p.c = res.data.move.col;
-        p.fr = M;
-        p.marked = false;
-        return;
-    }
-    case TypeWin: {
-        winner = res.data.win.res.color;
-        if (winner != Color_None) {
-            auto _marked = res.data.win.res.marked;
-            for (int i = 0; i < 4; i++) {
-                marked[_marked[i].r][_marked[i].c] = true;
-            }
-            lockUi = true;
-        }
-        return;
-    }
+void UiBoard::setWinner(Color winner, BoardLoc* _marked) {
+    if (winner == Color_None) return;
+    for (int i = 0; i < 4; i++) {
+        marked[_marked[i].r][_marked[i].c] = true;
     }
 }
 
 void UiBoard::clear() {
-    lockUi = false;
     pieces_l = 0;
     winner = Color_None;
     std::memset(&marked, 0, sizeof(marked));

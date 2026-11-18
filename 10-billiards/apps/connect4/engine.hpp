@@ -61,7 +61,7 @@ enum EngineDataType {
     TypeWin,
 };
 struct EngineData {
-    EngineDataType type;
+    EngineDataType type = TypeNone;
     union Data {
         char none = 0;
         struct {

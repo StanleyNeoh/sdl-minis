@@ -17,9 +17,12 @@ namespace _Connect4 {
         UiBoard board;
         Engine engine;
         Color turn = PlayerColor;
+        bool botPlays = true;
+        bool block = false;
 
         int colSelected(float x, float originX, float regionW);
         void handleEngineData(EngineData& res);
+        bool reqSearchMove(Color turn, bool play, int depth);
         void drawControls();
         void drawPieces(ImDrawList* drawList, Uint64 dt, ImVec2 origin, ImVec2 region);
         void drawBoard(ImDrawList* drawList, ImVec2 origin, ImVec2 region);

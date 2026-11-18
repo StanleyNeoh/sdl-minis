@@ -92,6 +92,7 @@ Action Engine::searchMove(Board& board, Color turn, int depth) {
 }
 
 void Engine::threadLoop(Board* board, ResPipe* resPipe, ReqPipe* reqPipe) {
+    std::cout << "Starting connect4 engine thread\n";
     bool done = false;
     while (!done) {
         EngineData req;
@@ -132,6 +133,7 @@ void Engine::threadLoop(Board* board, ResPipe* resPipe, ReqPipe* reqPipe) {
             }
         }
     }
+    std::cout << "Ending connect4 engine thread\n";
 }
 
 void Engine::startThread() {
@@ -139,6 +141,7 @@ void Engine::startThread() {
 }
 
 void Engine::stopThread() {
+    if (!_thread.joinable()) return;
     EngineData req = {
         .type = TypeKill
     };
@@ -147,6 +150,7 @@ void Engine::stopThread() {
 }
 
 void Engine::clear() {
+    stopThread();
     board.clear();
     reqPipe.clear();
     resPipe.clear();

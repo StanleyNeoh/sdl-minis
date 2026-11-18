@@ -16,14 +16,14 @@ struct UiPiece {
 };
 
 struct UiBoard {
-    bool lockUi = false;
     int pieces_l = 0;
     std::array<UiPiece, M * N> pieces;
     Color winner = Color_None;
     bool marked[M][N] {};
 
-    void addPiece(const Engine& engine, int col, Color color);
-    void handleEngineData(const EngineData& res);
+    bool reqAddPiece(const Engine& engine, int col, Color color);
+    void addPiece(int col, Color color, int r);
+    void setWinner(Color winner, BoardLoc* _marked);
     void clear();
 };
 

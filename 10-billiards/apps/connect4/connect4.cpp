@@ -4,31 +4,7 @@
 namespace Apps {
 namespace _Connect4 {
 
-
-void App::drawControls() {
-    bool restart = false;
-    if (ImGui::Button("Player starts")) {
-        turn = Color_Red;
-        restart = true;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Bot starts")) {
-        turn = Color_Blue;
-        restart = true;
-    }
-    if (ImGui::Button("Best Move")) {
-        EngineData req = {
-            .type = TypeSearch,
-            .data = { .search = {
-                .turn = turn,
-                .depth = 7,
-                .play = false,
-            }}
-        };
-        engine.reqPipe.push(req);
-    }
-    if (restart) board.clear();
-}
+constexpr int searchDepth = 7;
 
 int App::colSelected(float x, float originX, float regionW) {
     Utils::map1(x, originX, regionW, 0, BoardFrame::W);
@@ -37,20 +13,74 @@ int App::colSelected(float x, float originX, float regionW) {
 }
 
 void App::handleEngineData(EngineData& res) {
-    board.handleEngineData(res);
     switch (res.type) {
         case TypeSearch: {
             Action& action = res.data.search.res.action;
             if (res.data.search.play) {
-                std::cout << "Play move\n";
+                board.reqAddPiece(engine, action.bestMove, turn);
+                turn = switchTurn(turn);
             } else {
                 std::cout << "BestMove: " << action.bestMove << "\n";
                 for (int i = 0; i < N; i++) {
                     std::cout << i << ": " << action.scores[i] << "\n";
                 }
             }
+            return;
+        }
+        case TypeMove: {
+            board.addPiece(res.data.move.col, res.data.move.turn, res.data.move.res.r);
+            block = false;
+            return;
+        }
+        case TypeWin: {
+            board.setWinner(res.data.win.res.color, res.data.win.res.marked);
+            block = true;
+            return;
         }
     }
+}
+
+bool App::reqSearchMove(Color turn, bool play, int depth) {
+    if (play && turn != BotColor) return false;
+    EngineData req = {
+        .type = TypeSearch,
+        .data = { .search = {
+            .turn = turn,
+            .depth = depth,
+            .play = play,
+        }}
+    };
+    engine.reqPipe.block_push(req);
+    return true;
+}
+
+
+void App::drawControls() {
+    bool restart = false;
+    Color _turn = turn;
+    bool _botPlays = botPlays;
+    if (ImGui::Button("Player starts")) {
+        _turn = Color_Red;
+        restart = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Bot starts")) {
+        _turn = Color_Blue;
+        restart = true;
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox("Bot Plays", &_botPlays);
+
+    if (ImGui::Button("Best Move")) {
+        reqSearchMove(turn, false, searchDepth);
+    }
+
+    if (restart) {
+        deinit();
+        init();
+    }
+    turn = _turn;
+    botPlays = _botPlays;
 }
 
 void App::drawPieces(ImDrawList* drawList, Uint64 dt, ImVec2 origin, ImVec2 region) {
@@ -94,8 +124,11 @@ void App::drawBoard(ImDrawList* drawList, ImVec2 origin, ImVec2 region) {
     if (ImGui::IsItemClicked()) {
         ImVec2 pos = ImGui::GetIO().MousePos;
         int col = colSelected(pos.x, origin.x, region.x);
-        board.addPiece(engine, col, turn);
-        turn = switchTurn(turn);
+        if (!block) {
+            board.reqAddPiece(engine, col, turn);
+            block = true;
+            turn = switchTurn(turn);
+        }
     }
 }
 
@@ -105,6 +138,10 @@ void App::draw(Uint64 dt) {
     EngineData res;
     while (engine.resPipe.pop(res)) {
         handleEngineData(res);
+    }
+
+    if (botPlays && !block && reqSearchMove(turn, true, searchDepth)) {
+        block = true;
     }
 
     drawControls();
@@ -124,8 +161,11 @@ void App::init() {
 }
 
 void App::deinit() {
-    engine.stopThread();
     board.clear();
+    engine.clear();
+    turn = PlayerColor;
+    botPlays = true;
+    block = false;
 }
 
 
