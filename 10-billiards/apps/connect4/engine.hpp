@@ -12,9 +12,9 @@ namespace Apps {
 namespace _Connect4 {
 
 struct Score {
-    int a;
-    int b;
-    int c;
+    u_int8_t a;
+    u_int8_t b;
+    u_int8_t c;
 
     bool operator==(const Score& other) const {
         return a == other.a && b == other.b && c == other.c;

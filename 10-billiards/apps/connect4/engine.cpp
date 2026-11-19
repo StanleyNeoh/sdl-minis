@@ -38,7 +38,6 @@ namespace {
         return count;
     }
 
-
     Score heuristic(const Board& board, Color turn) {
         Color other = switchTurn(turn);
         Score score{0, 0, 0};

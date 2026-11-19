@@ -16,6 +16,7 @@ namespace _Connect4 {
     static constexpr Color PlayerColor = Color_Red;
     static constexpr int M = BoardFrame::M;
     static constexpr int N = BoardFrame::N;
+    using _Board = Color[M][N];
 
     Color switchTurn(Color turn);
 
@@ -24,7 +25,7 @@ namespace _Connect4 {
     };
 
     struct Board {
-        Color board[M][N] {};
+        _Board board;
         int next[N] {};
 
         int addPiece(int col, Color color);
